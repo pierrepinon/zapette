@@ -23,6 +23,7 @@ func balayer(
 ) error {
 	lu := bufio.NewReaderSize(entree, 64*1024)
 
+	enteteTransmise := false
 	var lignesCourantes []string
 	courante := Chaine{}
 
@@ -46,9 +47,14 @@ func balayer(
 				}
 				lignesCourantes = append(lignesCourantes[:0], brute)
 			case strings.HasPrefix(normale, "#EXTM3U"):
-				if surEnTete != nil {
-					if err := surEnTete(brute); err != nil {
-						return err
+				// Seul le premier en-tête est transmis : les redondants et
+				// ceux qui couperaient une entrée en cours sont ignorés.
+				if !enteteTransmise && len(lignesCourantes) == 0 {
+					enteteTransmise = true
+					if surEnTete != nil {
+						if err := surEnTete(brute); err != nil {
+							return err
+						}
 					}
 				}
 			case strings.HasPrefix(normale, "#"):

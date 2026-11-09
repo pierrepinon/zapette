@@ -93,6 +93,19 @@ https://flux.exemple.tld/a.m3u8
 `,
 		},
 		{
+			nom: "en-tête #EXTM3U redondant ignoré",
+			playlist: `#EXTM3U
+#EXTINF:-1 tvg-id="a.fr" group-title="Sports",A
+#EXTM3U
+https://flux.exemple.tld/a.m3u8
+`,
+			groupesAutorises: []string{"Sports"},
+			attendu: `#EXTM3U
+#EXTINF:-1 tvg-id="a.fr" group-title="Sports",A
+https://flux.exemple.tld/a.m3u8
+`,
+		},
+		{
 			nom: "dernière entrée sans saut de ligne final émise telle quelle",
 			playlist: "#EXTM3U\n" +
 				"#EXTINF:-1 tvg-id=\"a.fr\" group-title=\"Sports\",A\n" +
