@@ -296,7 +296,9 @@ func (s *Serveur) compteSnapshot() snapshotStatus {
 		if !os.IsNotExist(err) {
 			slog.Warn("stat du snapshot impossible pour /api/status", "fichier", chemin, "erreur", err)
 		}
-		return snapshotStatus{}
+		// Sans snapshot : null nulle part — le dashboard ne gère pas
+		// deux formes du contrat (ni âge négatif, ni per_group absent).
+		return snapshotStatus{PerGroup: map[string]int{}}
 	}
 
 	clef := fmt.Sprintf("%d:%d", info.Size(), info.ModTime().UnixNano())

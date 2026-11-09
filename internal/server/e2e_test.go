@@ -151,6 +151,22 @@ func TestFroidSansSnapshot(t *testing.T) {
 	if code, _, _ := obtenir(t, recette.URL+"/"); code != http.StatusOK {
 		t.Errorf("/ : code %d, voulu 200", code)
 	}
+
+	// Même à froid, /api/status reste 200 et conforme : pas de null dans
+	// les listes et maps du contrat (le dashboard ne gère pas deux formes).
+	code, _, corps := obtenir(t, recette.URL+"/api/status")
+	if code != http.StatusOK {
+		t.Fatalf("/api/status à froid : code %d, voulu 200", code)
+	}
+	for champ, brut := range map[string]string{
+		"sources":   `"sources":{}`,
+		"per_group": `"per_group":{}`,
+		"errors":    `"errors":[]`,
+	} {
+		if !strings.Contains(string(corps), brut) {
+			t.Errorf("/api/status à froid : %s absent ou null (voulu %s)\n%s", champ, brut, corps)
+		}
+	}
 }
 
 // TestPrevisuGroupe : GET /m3u?group=<nom> est une prévisualisation brute
