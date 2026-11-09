@@ -6,9 +6,10 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/pierrepinon/zapette/internal/config"
+	"github.com/pierrepinon/zapette/internal/fetch"
+	"github.com/pierrepinon/zapette/internal/store"
 )
 
 // cheminConfig provient de ZAPETTE_CONFIG, avec ./config.yaml par défaut.
@@ -33,26 +34,21 @@ func main() {
 	}
 	consignerResume(cfg)
 
-	// Relecture de la config à chaque tick ; une nouvelle config invalide
-	// conserve la dernière bonne et se contente d'un avertissement.
-	tick := time.NewTicker(cfg.RefreshInterval)
-	defer tick.Stop()
-	for {
-		select {
-		case <-ctx.Done():
-			slog.Info("arrêt demandé")
-			return
-		case <-tick.C:
-			cfgRelue, err := loader.Relire()
-			if err != nil {
-				slog.Warn("config invalide, dernière bonne conservée", "erreur", err)
-				continue
-			}
-			cfg = cfgRelue
-			tick.Reset(cfg.RefreshInterval)
-			consignerResume(cfg)
-		}
+	// Le store : copies de source, snapshot fusionné et meta.json sur
+	// disque — publié par renommages atomiques, jamais de fichier partiel.
+	boutique, err := store.Ouvrir(cfg.DataDir)
+	if err != nil {
+		slog.Error("ouverture du répertoire de données impossible", "répertoire", cfg.DataDir, "erreur", err)
+		os.Exit(1)
 	}
+
+	// L'ordonnanceur : fetch séquentiel au démarrage puis à chaque tick,
+	// config relue à chaque tick (dernière bonne conservée), fetch au
+	// timeout de la config avec 1+reprises et backoff fixe. SIGINT/SIGTERM
+	// coupent le fetch en cours ; Run termine proprement.
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
+	ordonnanceur.Run(ctx, loader)
+	slog.Info("service arrêté")
 }
 
 // consignerResume journalise le résumé de la config au format JSON :
