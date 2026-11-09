@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <title>zapette — statut</title>
+    <script>
+      // Prévente le flash de thème : applique la classe .dark dès le
+      // parsing, avant le CSS. Même logique que src/lib/theme.ts.
+      (function () {
+        try {
+          var preference = localStorage.getItem('zapette-theme');
+          if (preference !== 'dark' && preference !== 'light') preference = 'system';
+          if (preference === 'dark') {
+            document.documentElement.classList.add('dark');
+          } else if (preference === 'system' && matchMedia('(prefers-color-scheme: dark)').matches) {
+            document.documentElement.classList.add('dark');
+          } else {
+            document.documentElement.classList.remove('dark');
+          }
+        } catch (e) {
+          /* pas de localStorage : le thème system restera appliqué par le JS */
+        }
+      })();
+    </script>
+    <script type="module" src="/src/main.ts"></script>
+  </head>
+  <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+    <div id="app"></div>
+  </body>
+</html>
