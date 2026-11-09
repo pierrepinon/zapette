@@ -6,17 +6,15 @@ import (
 	"strings"
 )
 
-// balayer lit la playlist ligne à ligne et convoque :
-//   - surEnTete avec la ligne #EXTM3U brute (fins de ligne comprises), une
-//     seule fois, quand elle est rencontrée ;
-//   - surChaine avec la chaîne analysée et toutes ses lignes brutes, depuis
-//     #EXTINF jusqu'à l'URL de flux incluse (fins de ligne comprises), dès
-//     qu'elle est complète.
-//
-// Les lignes orphelines (directives ou URL hors d'une entrée) et les en-têtes
-// redondants sont ignorés. Aucune ligne n'est retenue en mémoire au-delà de
-// l'entrée courante : la playlist complète n'est jamais chargée (ADR-0001).
-func balayer(
+// Balayer expose la primitive complète de balayage : la première ligne
+// #EXTM3U brute passe par surEnTete, chaque entrée complète passe par
+// surChaine avec toutes ses lignes brutes, depuis #EXTINF jusqu'à l'URL de
+// flux incluse, fins de ligne d'origine comprises et à l'octet près. Ce sont
+// les lignes d'origine du fournisseur, jamais réécrites. Les lignes
+// orphelines (directives ou URL hors d'une entrée) et les en-têtes redondants
+// sont ignorés. Aucune ligne n'est retenue en mémoire au-delà de l'entrée
+// courante : la playlist complète n'est jamais chargée (ADR-0001).
+func Balayer(
 	entree io.Reader,
 	surEnTete func(brute string) error,
 	surChaine func(c Chaine, lignes []string) error,

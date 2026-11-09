@@ -31,7 +31,7 @@ func Filtrer(entree io.Reader, sortie io.Writer, groupesAutorises []string) erro
 
 	enteteEcrite := false
 
-	err := balayer(entree,
+	err := Balayer(entree,
 		func(enTete string) error {
 			// Premier en-tête : émis tel quel, les attributs comme url-tvg
 			// sont préservés, jamais réécrits.

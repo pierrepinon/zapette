@@ -9,7 +9,7 @@ import "io"
 // Chaine.Identite (tvg-id sinon URL de flux) sans garder la playlist en
 // mémoire (ADR-0001).
 func Parcourir(entree io.Reader, visiter func(c Chaine) error) error {
-	return balayer(entree, nil, func(c Chaine, _ []string) error {
+	return Balayer(entree, nil, func(c Chaine, _ []string) error {
 		return visiter(c)
 	})
 }
