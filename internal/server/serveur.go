@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net/http"
 	"os"
@@ -29,6 +30,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/pierrepinon/zapette/frontend"
 	"github.com/pierrepinon/zapette/internal/config"
 	"github.com/pierrepinon/zapette/internal/m3u"
 	"github.com/pierrepinon/zapette/internal/store"
@@ -48,6 +50,10 @@ type Serveur struct {
 	lireConfig func() config.Config
 	horloge    func() time.Time
 	erreurs    anneauErreurs
+	// page : le dashboard embarqué (build Vite production, embed.FS).
+	// Dépaqueté UNE fois à la construction ; la lecture du FS intégré est
+	// sûre en concurrence, pas de verrou nécessaire.
+	page fs.FS
 
 	verrou    sync.Mutex
 	clefCache string // "taille:modtime" du snapshot.m3u déjà compté
@@ -61,28 +67,56 @@ type compteursSnapshot struct {
 
 // Nouveau prépare le serveur HTTP. lireConfig est invoqué à chaque
 // /api/status (config.Loader.Relire en production) ; le serveur ignore son
-// erreur : le loader retourne déjà la dernière bonne configuration.
+// erreur : le loader retourne déjà la dernière bonne configuration. Le
+// dashboard embarqué (frontend.Dist) est dépaqueté ici ; en cas d'échec de
+// dépaquetage (jamais observé : dist/ est vérifié au build), slog le
+// signalerait à la première requête GET / plutôt qu'à l'écoute.
 func Nouveau(boutique *store.Store, lireConfig func() config.Config) *Serveur {
+	page, erreurPage := frontend.Dist()
+	if erreurPage != nil {
+		slog.Error("dépaquetage du dashboard embarqué impossible", "erreur", erreurPage)
+		page = nil
+	}
 	return &Serveur{
 		boutique:   boutique,
 		lireConfig: lireConfig,
 		horloge:    time.Now,
+		page:       page,
 	}
 }
 
 // Handler assemble le routeur public : les artefacts servis et l'API de
-// statut. GET / sert une page minimale — le dashboard embarqué du ticket
-// suivant viendra s'y insérer.
+// statut. GET / sert le dashboard embarqué (build Vite : index.html,
+// assets hachés) — page unique, aucune ressource externe au runtime : le
+// binaire la sert hors-ligne comme derrière un reverse proxy. La route
+// fourre-tout « GET / » est en dessous des routes nommées du mux : /m3u,
+// /xmltv, /api/status et /m3u?group= gardent la main.
 func (s *Serveur) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /m3u", s.servirM3U)
 	mux.HandleFunc("GET /xmltv", s.servirXMLTV)
 	mux.HandleFunc("GET /api/status", s.statut)
-	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-		_, _ = w.Write([]byte("zapette\n"))
-	})
+	// Fourre-tout sous « / » : la racine (index.html) ET les assets hachés
+	// (GET /assets/*.js|css). Plus spécifique partout ailleurs : /m3u,
+	// /xmltv, /api/status et /m3u?group= gardent la main, un autre script
+	// (POST /) répond 405 method not allowed.
+	mux.HandleFunc("GET /", s.tableauBord)
 	return mux
+}
+
+// tableauBord sert le dashboard embarqué sur GET / : http.FS au-dessus
+// de l'embed, changement de mime correct pour chaque asset (html, css,
+// js), et no-cache pour que le navigateur accepte un nouveau build sans
+// délai. Sans page dépaquetée (échec improbable de frontend.Dist) :
+// repli minimal en texte, l'API reste servie et explicite.
+func (s *Serveur) tableauBord(w http.ResponseWriter, r *http.Request) {
+	if s.page == nil {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		_, _ = w.Write([]byte("zapette : dashboard embarqué indisponible\n"))
+		return
+	}
+	w.Header().Set("Cache-Control", "no-cache")
+	http.FileServerFS(s.page).ServeHTTP(w, r)
 }
 
 // reponse503 répond 503 avec un corps JSON explicite : le lecteur et le
