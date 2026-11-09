@@ -160,10 +160,12 @@ func TestBouclerSauteLesTicksTombesPendantLaPasse(t *testing.T) {
 }
 
 // TestBouclerRelitFetchRetriesAChaud : fetch_retries est relu à chaque
-// passe — passe 1 (retries 0) = 1 seul appel ; config réécrite (retries 2)
-// ; passe 2 = 3 appels (1+2). La relecture à chaud est effective sans
-// redémarrage, symétrique au FetchTimeout déjà relu par passe (story 14).
-// La fenêtre réseau factice échoue à chaque tentative : les appels mesurent
+// passe — passe 1 (retries 1) = 2 appels (1+1) ; config réécrite
+// (retries 2) ; passe 2 = 3 appels (1+2), soit 5 au total. La relecture à
+// chaud est effective sans redémarrage, symétrique au FetchTimeout déjà
+// relu par passe (story 14). NB : fetch_retries: 0 serait coercé au défaut
+// 3 par appliquerDefauts de la config — le scénario passe par 1. La
+// fenêtre réseau factice échoue à chaque tentative : les appels mesurent
 // les essais, l'URL n'est nulle part joignable et le serveur absent.
 func TestBouclerRelitFetchRetriesAChaud(t *testing.T) {
 	b, dir := nouvelleBoutique(t)
