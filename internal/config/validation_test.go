@@ -52,6 +52,17 @@ sources:
 `,
 			mentionne: "m3u_url",
 		},
+		"deux sources homonymes": {
+			yaml: `
+refresh_interval: 6h
+sources:
+  - name: provider-a
+    m3u_url: https://exemple-a.tld/m3u
+  - name: provider-a
+    m3u_url: https://exemple-b.tld/m3u
+`,
+			mentionne: "unicité",
+		},
 	}
 
 	for nom, jeu := range jeux {

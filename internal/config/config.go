@@ -95,6 +95,11 @@ func valider(cfg *Config) error {
 		if source.M3UURL == "" {
 			return fmt.Errorf("sources[%d] (%s) : m3u_url manquant", i, source.Name)
 		}
+		for j := range i {
+			if cfg.Sources[j].Name == source.Name {
+				return fmt.Errorf("sources[%d] : unicité des name : %q déjà utilisé par la source %d, ils servent de clé aux copies de source sur disque", i, source.Name, j)
+			}
+		}
 	}
 	return nil
 }
