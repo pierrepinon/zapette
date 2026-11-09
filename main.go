@@ -46,7 +46,7 @@ func main() {
 	// config relue à chaque tick (dernière bonne conservée), fetch au
 	// timeout de la config avec 1+reprises et backoff fixe. SIGINT/SIGTERM
 	// coupent le fetch en cours ; Run termine proprement.
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, cfg.FetchRetries, fetch.RetourArriereDefaut)
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
 	ordonnanceur.Run(ctx, loader)
 	slog.Info("service arrêté")
 }

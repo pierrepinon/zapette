@@ -24,10 +24,10 @@ func TestRecupererEssaisEtBackoffFixe(t *testing.T) {
 		}
 		return io.NopCloser(strings.NewReader("corps")), nil
 	}
-	o := Nouveau(nil, nil, 2, 1*time.Millisecond)
+	o := Nouveau(nil, nil, 1*time.Millisecond)
 
 	départ := time.Now()
-	corps, err := o.recuperer(context.Background(), faux, "https://exemple.tld/m3u")
+	corps, err := o.recuperer(context.Background(), faux, "https://exemple.tld/m3u", 2)
 	if err != nil {
 		t.Fatalf("recuperer : %v", err)
 	}
@@ -48,9 +48,9 @@ func TestRecupererEpuiseLesEssais(t *testing.T) {
 		appels.Add(1)
 		return nil, errors.New("statut HTTP 500")
 	}
-	o := Nouveau(nil, nil, 3, 1*time.Millisecond)
+	o := Nouveau(nil, nil, 1*time.Millisecond)
 
-	corps, err := o.recuperer(context.Background(), faux, "https://exemple.tld/m3u")
+	corps, err := o.recuperer(context.Background(), faux, "https://exemple.tld/m3u", 3)
 	if err == nil {
 		t.Fatal("recuperer devait échouer")
 	}
@@ -70,11 +70,11 @@ func TestRecupererSArreteALAnnulation(t *testing.T) {
 		appels.Add(1)
 		return nil, errors.New("réseau indisponible")
 	}
-	o := Nouveau(nil, nil, 3, 5*time.Second)
+	o := Nouveau(nil, nil, 5*time.Second)
 
 	ctx, annule := context.WithCancel(context.Background())
 	annule()
-	if _, err := o.recuperer(ctx, faux, "https://exemple.tld/m3u"); err == nil {
+	if _, err := o.recuperer(ctx, faux, "https://exemple.tld/m3u", 3); err == nil {
 		t.Fatal("recuperer devait échouer, contexte annulé")
 	}
 	if appels.Load() != 1 {

@@ -94,7 +94,7 @@ func nouvelleBoutique(t *testing.T) (*store.Store, string) {
 }
 
 func nouvelOrdonnanceur(b *store.Store) *Ordonnanceur {
-	return Nouveau(b, NouveauFetcher, 0, 1*time.Millisecond)
+	return Nouveau(b, NouveauFetcher, 1*time.Millisecond)
 }
 
 // TestPasseFiltreCopieEtPublie : la passe complète — m3u filtrées par liste

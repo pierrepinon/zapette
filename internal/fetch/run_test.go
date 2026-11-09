@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -50,7 +51,7 @@ func TestRunFetchAuDemarragePuisAuxTicks(t *testing.T) {
 			appels.Add(1)
 			return interne(ctx, url)
 		}
-	}, 0, 1*time.Millisecond)
+	}, 1*time.Millisecond)
 	loader := config.NewLoader(chemin)
 
 	ctx, annule := context.WithCancel(context.Background())
@@ -101,7 +102,7 @@ func TestBouclerSauteLesTicksTombesPendantLaPasse(t *testing.T) {
 	t.Cleanup(ouvrirCapot)
 	b, dir := nouvelleBoutique(t)
 	chemin := ecrireFichierDepot(t, dir, "1h", serveurM3U.URL)
-	o := Nouveau(b, NouveauFetcher, 0, 1*time.Millisecond)
+	o := Nouveau(b, NouveauFetcher, 1*time.Millisecond)
 	loader := config.NewLoader(chemin)
 
 	ticks := make(chan time.Time, 1) // tampon 1 : comme un Ticker
@@ -158,6 +159,55 @@ func TestBouclerSauteLesTicksTombesPendantLaPasse(t *testing.T) {
 	}
 }
 
+// TestBouclerRelitFetchRetriesAChaud : fetch_retries est relu à chaque
+// passe — passe 1 (retries 0) = 1 seul appel ; config réécrite (retries 2)
+// ; passe 2 = 3 appels (1+2). La relecture à chaud est effective sans
+// redémarrage, symétrique au FetchTimeout déjà relu par passe (story 14).
+// La fenêtre réseau factice échoue à chaque tentative : les appels mesurent
+// les essais, l'URL n'est nulle part joignable et le serveur absent.
+func TestBouclerRelitFetchRetriesAChaud(t *testing.T) {
+	b, dir := nouvelleBoutique(t)
+	chemin := filepath.Join(t.TempDir(), "config.yaml")
+	// fetch_retries: 1 (0 serait coercé au défaut 3 par appliquerDefauts).
+	ecrireFichierRetries(t, chemin, dir, 1, "http://127.0.0.1:1/ram.e")
+	var appels atomic.Int64
+	o := Nouveau(b, func(timeout time.Duration) Fetcher {
+		return func(ctx context.Context, url string) (io.ReadCloser, error) {
+			appels.Add(1)
+			return nil, fmt.Errorf("statut HTTP 500 pour %s", url)
+		}
+	}, 1*time.Millisecond) // la passe lit les reprises dans cfg.FetchRetries
+	loader := config.NewLoader(chemin)
+
+	ticks := make(chan time.Time, 1)
+	ctx, annule := context.WithCancel(context.Background())
+	termine := make(chan struct{})
+	go func() { o.boucler(ctx, loader, ticks, func(time.Duration) {}); close(termine) }()
+
+	// Passe 1 : retries 1 → deux appels malgré l'échec (1+1).
+	ticks <- time.Now()
+	attendre(t, "2 appels de la passe 1", func() bool { return appels.Load() == 2 })
+	time.Sleep(50 * time.Millisecond)
+	if appels.Load() != 2 {
+		t.Fatalf("passe 1 : %d appels, attendu 2 (fetch_retries: 1)", appels.Load())
+	}
+
+	// Config réécrite : fetch_retries passe à 2 ; relu à ce tick.
+	ecrireFichierRetries(t, chemin, dir, 2, "http://127.0.0.1:1/ram.e")
+	ticks <- time.Now()
+	attendre(t, "5 appels au total (3 pour la passe 2)", func() bool { return appels.Load() == 5 })
+
+	annule()
+	select {
+	case <-termine:
+	case <-time.After(2 * time.Second):
+		t.Fatal("boucler ne s'est pas arrêté à l'annulation")
+	}
+	if appels.Load() != 5 {
+		t.Errorf("total : %d appels, attendu 5 — fetch_retries relu à chaud ?", appels.Load())
+	}
+}
+
 // TestArretProprePendantUnFetch : l'annulation pendant un fetch bloquant
 // termine Run promptement — le contexte coupe la fenêtre réseau.
 func TestArretProprePendantUnFetch(t *testing.T) {
@@ -172,7 +222,7 @@ func TestArretProprePendantUnFetch(t *testing.T) {
 
 	b, dir := nouvelleBoutique(t)
 	chemin := ecrireFichierDepot(t, dir, time.Hour.String(), serveur.URL)
-	o := Nouveau(b, NouveauFetcher, 3, 1*time.Millisecond) // essais larges
+	o := Nouveau(b, NouveauFetcher, 1*time.Millisecond) // reprises lues de la config (défaut 3)
 	loader := config.NewLoader(chemin)
 
 	ctx, annule := context.WithCancel(context.Background())
@@ -339,6 +389,16 @@ type residu struct {
 }
 
 func (r *residu) Error() string { return "temporaire résiduel : " + r.nom }
+
+// ecrireFichierRetries écrit une config de test : intervalle 1 h, une
+// source rameuse (toujours 500), fetch_retries paramétrable.
+func ecrireFichierRetries(t *testing.T, chemin, dir string, retries int, urlM3U string) {
+	t.Helper()
+	contenu := fmt.Sprintf("refresh_interval: 1h\nfetch_retries: %d\ndata_dir: %s\nsources:\n  - name: arte\n    m3u_url: %s\n", retries, dir, urlM3U)
+	if err := os.WriteFile(chemin, []byte(contenu), 0o644); err != nil {
+		t.Fatalf("écriture de la config de test : %v", err)
+	}
+}
 
 // attendre guette jusqu'à ce que condition devienne vraie (poll court),
 // avec une borne ferme — les pollings de tests ne doivent jamais pendre.

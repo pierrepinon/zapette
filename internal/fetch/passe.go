@@ -49,7 +49,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 	for _, src := range cfg.Sources {
 		es := meta.Sources[src.Name]
 		es.M3U = amorcer(es.M3U, suivant)
-		corps, erreur := o.recuperer(ctx, fetch, src.M3UURL)
+		corps, erreur := o.recuperer(ctx, fetch, src.M3UURL, cfg.FetchRetries)
 		if erreur != nil {
 			es.M3U.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
@@ -102,7 +102,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 			meta.Sources[src.Name] = es
 			continue
 		}
-		corps, erreur := o.recuperer(ctx, fetch, src.XMLTVURL)
+		corps, erreur := o.recuperer(ctx, fetch, src.XMLTVURL, cfg.FetchRetries)
 		if erreur != nil {
 			es.XMLTV.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
