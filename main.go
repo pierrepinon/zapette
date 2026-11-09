@@ -2,13 +2,18 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/pierrepinon/zapette/internal/config"
 	"github.com/pierrepinon/zapette/internal/fetch"
+	"github.com/pierrepinon/zapette/internal/server"
 	"github.com/pierrepinon/zapette/internal/store"
 )
 
@@ -46,9 +51,78 @@ func main() {
 	// config relue à chaque tick (dernière bonne conservée), fetch au
 	// timeout de la config avec 1+reprises et backoff fixe. SIGINT/SIGTERM
 	// coupent le fetch en cours ; Run termine proprement.
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
-	ordonnanceur.Run(ctx, loader)
+	// Le serveur HTTP : handlers de internal/server, config courante pour
+	// /api/status. L'ordonnanceur tourne en arrière-plan, Run bloque jusqu'à
+	// l'arrêt (SIGINT/SIGTERM), le serveur s'éteint ensuite proprement — le
+	// service reste disponible pendant les fetchs, jamais l'inverse.
+	serveur := server.Nouveau(boutique, configCourante(loader))
+	httpServ, ecouteur, err := demarrerHTTP(adresseEcoute(cfg), serveur.Handler())
+	if err != nil {
+		slog.Error("écoute impossible", "adresse", cfg.ServerAddr, "erreur", err)
+		os.Exit(1)
+	}
+	slog.Info("serveur HTTP en écoute", "adresse", ecouteur.Addr().String())
+
+	// Le signaleur du fetch nourrit le ring d'erreurs de /api/status :
+	// dépendance inversée par la callback, fetch ne connaît jamais server
+	// (story 15 — recent-error ring).
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+		AvecSignaleur(serveur.SignalerErreur)
+	go ordonnanceur.Run(ctx, loader)
+	<-ctx.Done()
+	slog.Info("arrêt demandé, extinctions en cours")
+
+	arret, arretAnnule := context.WithTimeout(context.Background(), 5*time.Second)
+	defer arretAnnule()
+	if err := httpServ.Shutdown(arret); err != nil {
+		slog.Warn("arrêt HTTP incomplet", "erreur", err)
+	}
 	slog.Info("service arrêté")
+}
+
+// configCourante adapte loader.Relire (config + erreur) au lecteur attendu
+// par le serveur : la reliture en échec conserve la dernière bonne config
+// que le serveur exhibe telle quelle sur /api/status, l'erreur étant déjà
+// tracée par l'ordonnanceur à chaque tick.
+func configCourante(loader *config.Loader) func() config.Config {
+	return func() config.Config {
+		cfg, _ := loader.Relire()
+		return cfg
+	}
+}
+
+// adresseEcoute résout l'adresse d'écoute : ZAPETTE_ADDR priorise
+// l'environnement, sinon server_addr de la config (défaut [::]:8080
+// appliqué par la config à la lecture).
+func adresseEcoute(cfg config.Config) string {
+	if adresse := os.Getenv("ZAPETTE_ADDR"); adresse != "" {
+		return adresse
+	}
+	if cfg.ServerAddr != "" {
+		return cfg.ServerAddr
+	}
+	return "[::]:8080"
+}
+
+// demarrerHTTP écoute l'adresse indiquée puis sert le handler en
+// arrière-plan ; l'écouteur est retourné pour les tests (port attribué) et
+// l'adresse hôte réellement bindée pour le journal. L'arrêt passe par
+// http.Server.Shutdown.
+func demarrerHTTP(adresse string, handler http.Handler) (*http.Server, net.Listener, error) {
+	ecouteur, err := net.Listen("tcp", adresse)
+	if err != nil {
+		return nil, nil, err
+	}
+	httpServ := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
+	go func() {
+		if err := httpServ.Serve(ecouteur); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("serveur HTTP arrêté sur erreur", "erreur", err)
+		}
+	}()
+	return httpServ, ecouteur, nil
 }
 
 // consignerResume journalise le résumé de la config au format JSON :
