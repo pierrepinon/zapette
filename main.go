@@ -63,7 +63,11 @@ func main() {
 	}
 	slog.Info("serveur HTTP en écoute", "adresse", ecouteur.Addr().String())
 
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
+	// Le signaleur du fetch nourrit le ring d'erreurs de /api/status :
+	// dépendance inversée par la callback, fetch ne connaît jamais server
+	// (story 15 — recent-error ring).
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+		AvecSignaleur(serveur.SignalerErreur)
 	go ordonnanceur.Run(ctx, loader)
 	<-ctx.Done()
 	slog.Info("arrêt demandé, extinctions en cours")

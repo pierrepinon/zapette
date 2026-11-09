@@ -44,15 +44,14 @@ const plafondErreurs = 20
 // snapshot (taille + horodatage du fichier) — un dump de 200 000 entrées
 // ne doit pas être balayé à chaque poll de 5 s du dashboard.
 type Serveur struct {
-	boutique    *store.Store
-	lireConfig  func() config.Config
-	horloge     func() time.Time
-	signalerFct func(string)
+	boutique   *store.Store
+	lireConfig func() config.Config
+	horloge    func() time.Time
+	erreurs    anneauErreurs
 
 	verrou    sync.Mutex
 	clefCache string // "taille:modtime" du snapshot.m3u déjà compté
 	compteurs compteursSnapshot
-	erreurs   anneauErreurs
 }
 
 type compteursSnapshot struct {

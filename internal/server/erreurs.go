@@ -7,9 +7,9 @@ import (
 
 // anneauErreurs garde les plafondErreurs dernières erreurs signalées pour
 // le ring « errors » de /api/status : les plus récentes d'abord, avec leur
-// horodatage. alimentée par SignalerErreur — câblé par le binaire pour les
-// échecs visibles du service ; la plomberie fetch → ring reste à raccorder
-// au ticket dashboard, le contrat JSON ne changera pas.
+// horodatage. En production, le signaleur de l'ordonnanceur de fetch est
+// branché dessus par le câblage (main) via AvecSignaleur — la dépendance
+// est inversée par la callback : fetch ne connaît jamais server.
 type anneauErreurs struct {
 	verrou  sync.Mutex
 	entrees []erreurRing

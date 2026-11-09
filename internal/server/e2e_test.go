@@ -420,16 +420,27 @@ func TestSnapshotServiOctetPourOctet(t *testing.T) {
 // TestRepliSurSnapshotEchecFetch : le fournisseur tombe en panne après une
 // passe réussie ; la passe suivante échoue pour ses artefacts, le service
 // continue de servir le dernier bon snapshot — octet pour octet — et
-// /api/status le montre (last_error renseigné, last_ok figé) (story 9).
+// /api/status le montre (last_error renseigné, last_ok figé) ET le ring
+// « errors » est alimenté via la callback : main branche le signaleur de
+// l'ordonnanceur sur le ring du serveur (story 15).
 func TestRepliSurSnapshotEchecFetch(t *testing.T) {
 	arte, panne := fournir(t, m3uPourE2E, xmltvPourE2E)
 	cfg := configE2E(t, arte)
-	passerUneFois(t, cfg)
 
 	boutique, err := store.Ouvrir(cfg.DataDir)
 	if err != nil {
 		t.Fatalf("ouverture du store : %v", err)
 	}
+	// Câblage de production : la callback du fetch alimente le ring du
+	// serveur (dépendance inversée, fetch ne connaît jamais server).
+	s := Nouveau(boutique, func() config.Config { return cfg })
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+		AvecSignaleur(s.SignalerErreur)
+
+	if err := ordonnanceur.Passe(context.Background(), cfg); err != nil {
+		t.Fatalf("passe réussie : %v", err)
+	}
+
 	avant := map[string]string{
 		"m3u":   lireFichier(t, boutique.CheminSnapshot("m3u")),
 		"xmltv": lireFichier(t, boutique.CheminSnapshot("xmltv")),
@@ -439,9 +450,12 @@ func TestRepliSurSnapshotEchecFetch(t *testing.T) {
 	// la config échoue désormais (connexion refusée).
 	panne()
 
-	passerUneFois(t, cfg)
+	if err := ordonnanceur.Passe(context.Background(), cfg); err != nil {
+		t.Fatalf("passe en échec : %v", err)
+	}
 
-	recette := E2E(t, cfg)
+	recette := httptest.NewServer(s.Handler())
+	t.Cleanup(recette.Close)
 	for artefact, avantBytes := range avant {
 		code, _, corps := obtenir(t, recette.URL+"/"+artefact)
 		if code != http.StatusOK {
@@ -458,6 +472,7 @@ func TestRepliSurSnapshotEchecFetch(t *testing.T) {
 			M3U   etatArtefactJSON `json:"m3u"`
 			XMLTV etatArtefactJSON `json:"xmltv"`
 		} `json:"sources"`
+		Errors []erreur `json:"errors"`
 	}
 	if err := json.Unmarshal(corps, &statut); err != nil {
 		t.Fatalf("/api/status non JSON : %v", err)
@@ -467,6 +482,20 @@ func TestRepliSurSnapshotEchecFetch(t *testing.T) {
 	}
 	if statut.Sources["arte"].M3U.LastOk == nil {
 		t.Error("sources.arte.m3u.last_ok perdu par la panne, voulu la dernière réussite")
+	}
+	// Le ring de /api/status reflète l'échec de la passe — jamais vide
+	// quand un fetch vient de tomber (story 15).
+	if len(statut.Errors) == 0 {
+		t.Fatal("ring errors VIDE après un fetch en échec : fonctionnalité morte")
+	}
+	trouve := false
+	for _, e := range statut.Errors {
+		if strings.Contains(e.Message, "arte") {
+			trouve = true
+		}
+	}
+	if !trouve {
+		t.Errorf("ring : aucun message ne cite la source \"arte\" ; reçus %v", statut.Errors)
 	}
 }
 
