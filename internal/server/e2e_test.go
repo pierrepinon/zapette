@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -139,6 +140,63 @@ func TestFroidSansSnapshot(t *testing.T) {
 
 	if code, _, _ := obtenir(t, recette.URL+"/"); code != http.StatusOK {
 		t.Errorf("/ : code %d, voulu 200", code)
+	}
+}
+
+// TestPrevisuGroupe : GET /m3u?group=<nom> est une prévisualisation brute
+// d'UN groupe du snapshot, filtrée à la volée en streaming (story 17) —
+// elle ne modifie jamais le snapshot, et un groupe absent donne une
+// playlist vide valide (#EXTM3U seul).
+func TestPrevisuGroupe(t *testing.T) {
+	cfg := configE2E(t, fournir(t, m3uPourE2E, xmltvPourE2E))
+	passerUneFois(t, cfg)
+	recette := E2E(t, cfg)
+
+	boutique, err := store.Ouvrir(cfg.DataDir)
+	if err != nil {
+		t.Fatalf("ouverture du store : %v", err)
+	}
+	avant, err := os.ReadFile(boutique.CheminSnapshot("m3u"))
+	if err != nil {
+		t.Fatalf("lecture du snapshot : %v", err)
+	}
+
+	attenduNews := `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+https://flux.exemple.tld/bfm.m3u8
+`
+	tests := []struct {
+		groupe string
+		corps  string
+	}{
+		{"News", attenduNews},
+		{"General", m3uPourE2E[:len(m3uPourE2E)-len(`#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+https://flux.exemple.tld/bfm.m3u8
+`)]},
+		{"Inconnu", "#EXTM3U url-tvg=\"https://exemple.tld/guide.xml\"\n"},
+	}
+	for _, cas := range tests {
+		code, entetes, corps := obtenir(t, recette.URL+"/m3u?group="+url.QueryEscape(cas.groupe))
+		if code != http.StatusOK {
+			t.Errorf("group=%s : code %d, voulu 200", cas.groupe, code)
+		}
+		if type_ := entetes.Get("Content-Type"); type_ != "audio/x-mpegurl; charset=utf-8" {
+			t.Errorf("group=%s : Content-Type %q, voulu audio/x-mpegurl; charset=utf-8", cas.groupe, type_)
+		}
+		if cache := entetes.Get("Cache-Control"); cache != "no-cache" {
+			t.Errorf("group=%s : Cache-Control %q, voulu no-cache", cas.groupe, cache)
+		}
+		if string(corps) != cas.corps {
+			t.Errorf("group=%s : contenu inattendu\nservi :\n%q\nvoulu :\n%q", cas.groupe, corps, cas.corps)
+		}
+	}
+
+	après, err := os.ReadFile(boutique.CheminSnapshot("m3u"))
+	if err != nil {
+		t.Fatalf("relecture du snapshot : %v", err)
+	}
+	if string(avant) != string(après) {
+		t.Error("la prévisu ?group= a modifié le snapshot")
 	}
 }
 

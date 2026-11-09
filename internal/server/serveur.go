@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/pierrepinon/zapette/internal/m3u"
 	"github.com/pierrepinon/zapette/internal/store"
 )
 
@@ -62,9 +63,44 @@ func reponse503(w http.ResponseWriter, message string) {
 	_ = json.NewEncoder(w).Encode(map[string]string{"erreur": message})
 }
 
-// servirM3U sert le snapshot M3U fusionné.
+// servirM3U sert le snapshot M3U fusionné ; avec ?group=<nom>, la
+// prévisualisation brute de ce seul groupe : filtrage à la volée en
+// streaming depuis le snapshot stocké (m3u.Filtrer), qui ne MODIFIE jamais
+// le snapshot (story 17). Le match est exact et case-sensitive, comme le
+// filtrage à la réception.
 func (s *Serveur) servirM3U(w http.ResponseWriter, r *http.Request) {
-	servirArtefact(w, s.boutique.CheminSnapshot("m3u"), "audio/x-mpegurl; charset=utf-8")
+	groupe := r.URL.Query().Get("group")
+	if groupe == "" {
+		servirArtefact(w, s.boutique.CheminSnapshot("m3u"), "audio/x-mpegurl; charset=utf-8")
+		return
+	}
+	servirPrevisu(w, s.boutique.CheminSnapshot("m3u"), groupe)
+}
+
+// servirPrevisu sert le M3U snapshot filtré à la volée sur un groupe :
+// le fichier est ouvert ici et la sortie du filtre est streamée vers la
+// réponse — le snapshot n'est pas réécrit, la mémoire reste constante
+// (ADR-0001).
+func servirPrevisu(w http.ResponseWriter, chemin, groupe string) {
+	snapshot, err := os.Open(chemin)
+	if err != nil {
+		if os.IsNotExist(err) {
+			reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
+			return
+		}
+		slog.Error("ouverture du snapshot impossible", "fichier", chemin, "erreur", err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	defer snapshot.Close()
+
+	w.Header().Set("Content-Type", "audio/x-mpegurl; charset=utf-8")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.WriteHeader(http.StatusOK)
+	// io.Copy avec filtre : stdin → m3u.Filtrer → réponse.
+	if err := m3u.Filtrer(snapshot, w, []string{groupe}); err != nil {
+		slog.Warn("prévisu de groupe interrompue", "groupe", groupe, "erreur", err)
+	}
 }
 
 // servirXMLTV sert le snapshot XMLTV fusionné.
