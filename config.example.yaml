@@ -1,0 +1,20 @@
+# Exemple de configuration Zapette — les secrets passent par des variables
+# d'environnement, jamais en clair dans ce fichier.
+# Développement ${VAR} : une référence quotée garde une valeur texte ; une
+# référence non quotée reçoit le type de la valeur développée (ex. un entier).
+
+refresh_interval: 6h                 # durée Go
+allowed_groups: [Sports, News]       # match exact, case-sensitive ; [] = tout garder
+sources:
+  - name: provider-a
+    m3u_url: ${IPTV_A_M3U_URL}
+    xmltv_url: ${IPTV_A_XMLTV_URL}     # optionnel : omettre la clé si absent
+  - name: provider-a-vod
+    m3u_url: ${IPTV_A_VOD_M3U_URL}
+
+fetch_timeout: 60s
+fetch_retries: 3                     # backoff fixe 5 s
+server_addr: ${ZAPETTE_ADDR}         # défaut [::]:8080
+data_dir: ${ZAPETTE_DATA_DIR}        # défaut ./data
+public_ipv4_url: https://api4.ipify.org   # optionnel, défauts ipify
+public_ipv6_url: https://api6.ipify.org

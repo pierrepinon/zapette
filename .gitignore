@@ -1,0 +1,14 @@
+# Binaires compilées
+/zapette
+/zapette-*
+
+# Données runtime : copies de source et snapshots
+/data/
+
+# Frontend (dashboard embarqué)
+node_modules/
+dist/
+
+# Éditeurs et OS
+*.swp
+.DS_Store
