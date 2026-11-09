@@ -82,9 +82,9 @@ func (r *Resolver) Etat() Etat {
 // statut, corps illisible — retombe sur « indisponible » pour la famille
 // concernée : l'état reflète la DERNIÈRE passe, jamais une valeur périmée.
 // L'horodatage est avancé à chaque passe, y compris en échec : une vérification
-// a bien eu lieu. L'erreur de passe est retournée pour les tests et la
-// journalisation (elle n'arrête jamais le résolveur).
-func (r *Resolver) Verifier(ctx context.Context) error {
+// a bien eu lieu. AUCUN retour d'erreur : l'échec est journalisé dans
+// resoudre (famille, endpoint, erreur) et visible dans Etat, jamais propagé.
+func (r *Resolver) Verifier(ctx context.Context) {
 	cfg := r.lireConfig()
 	fetch := r.fenetre(Timeout)
 
@@ -95,7 +95,6 @@ func (r *Resolver) Verifier(ctx context.Context) error {
 	maintenant := r.horloge()
 	r.etat = Etat{IPv4: ipv4, IPv6: ipv6, DerniereVerification: &maintenant}
 	r.verrou.Unlock()
-	return nil
 }
 
 // resoudre fetch un endpoint echo et retourne l'adresse lue, ou
@@ -122,9 +121,7 @@ func resoudre(ctx context.Context, fetch Fetcher, url, famille string) string {
 // le fetch en cours et termine proprement. La passe n'est JAMAIS bloquante
 // pour le service : Run est appelé dans sa propre goroutine.
 func (r *Resolver) Run(ctx context.Context) {
-	if err := r.Verifier(context.Background()); err != nil {
-		slog.Warn("première résolution IP en échec", "erreur", err)
-	}
+	r.Verifier(context.Background())
 	tick := time.NewTicker(r.intervalleCourant())
 	defer tick.Stop()
 	r.boucler(ctx, tick.C, tick.Reset)
@@ -158,9 +155,7 @@ func (r *Resolver) boucler(ctx context.Context, ticks <-chan time.Time, reinitia
 			if cfg.RefreshInterval > 0 {
 				reinitialiser(cfg.RefreshInterval)
 			}
-			if err := r.Verifier(ctx); err != nil {
-				slog.Warn("résolution IP en échec", "erreur", err)
-			}
+			r.Verifier(ctx)
 			// Les ticks tombés pendant la passe ne déclenchent rien :
 			// drain avant de retourner dans le select (symétrie fetch).
 			r.drainer(ticks)

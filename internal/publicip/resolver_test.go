@@ -51,9 +51,7 @@ func TestVerifierExposeIPV4EtIPV6(t *testing.T) {
 	cfg := config.Config{PublicIPv4URL: urlV4, PublicIPv6URL: urlV6}
 	resolver := Nouveau(func() config.Config { return cfg }, fenetreReelle)
 
-	if err := resolver.Verifier(context.Background()); err != nil {
-		t.Fatalf("Vérifier : %v", err)
-	}
+	resolver.Verifier(context.Background())
 
 	etat := resolver.Etat()
 	if etat.IPv4 != "203.0.113.7" {
@@ -99,9 +97,9 @@ func TestVerifierEnEchecResteIndisponible(t *testing.T) {
 	}
 	resolver := Nouveau(func() config.Config { return cfg }, fenetreReelle)
 
-	if err := resolver.Verifier(context.Background()); err != nil {
-		t.Fatalf("Vérifier ne doit jamais bloquer ni avorter : %v", err)
-	}
+	// L'échec réseau ne bloque ni n'avorte : l'échec est journalisé dans
+	// resoudre et visible dans Etat, jamais propagé.
+	resolver.Verifier(context.Background())
 
 	etat := resolver.Etat()
 	if etat.IPv4 != "indisponible" || etat.IPv6 != "indisponible" {
@@ -123,7 +121,7 @@ func TestVerifierTransmetTimeoutCinq(t *testing.T) {
 		}
 	}
 	resolver := Nouveau(func() config.Config { return config.Config{} }, fenetre)
-	_ = resolver.Verifier(context.Background())
+	resolver.Verifier(context.Background())
 
 	if recu != Timeout {
 		t.Errorf("timeout transmis = %v, voulu %v", recu, Timeout)
@@ -163,9 +161,7 @@ func TestBouclerRelitLaConfigAChaqueTick(t *testing.T) {
 	resolver := Nouveau(lireConfig, fenetreReelle)
 
 	// Passe de démarrage (comme Run) : la config version 0.
-	if err := resolver.Verifier(context.Background()); err != nil {
-		t.Fatalf("Vérifier au démarrage : %v", err)
-	}
+	resolver.Verifier(context.Background())
 
 	ticks := make(chan time.Time)
 	var resets []time.Duration
