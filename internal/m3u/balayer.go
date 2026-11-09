@@ -34,6 +34,8 @@ func balayer(
 		if len(brute) > 0 {
 			normale := strings.TrimRight(brute, "\r\n")
 			switch {
+			case normale == "":
+				// Ligne vide : ignorée, elle ne clôt pas l'entrée courante.
 			case strings.HasPrefix(normale, "#EXTINF"):
 				tvgID, _ := attribut(normale, "tvg-id")
 				groupe, _ := attribut(normale, "group-title")
