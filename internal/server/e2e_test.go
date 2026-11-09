@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -37,21 +38,30 @@ https://flux.exemple.tld/bfm.m3u8
 )
 
 // fournir mocke le fournisseur : un upstream httptest par artefact, URLs
-// injectées dans la source de config retournée.
-func fournir(t *testing.T, m3u, xmltv string) config.Source {
+// injectées dans la source de config retournée. La fonction retournée met
+// le fournisseur en PANNE (fermeture des serveurs fake) pour les scénarios
+// de repli.
+func fournir(t *testing.T, m3u, xmltv string) (config.Source, func()) {
 	t.Helper()
+	var montés []*httptest.Server
 	publier := func(corps string) string {
 		serveur := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 			_, _ = w.Write([]byte(corps))
 		}))
 		t.Cleanup(serveur.Close)
+		montés = append(montés, serveur)
 		return serveur.URL
+	}
+	panne := func() {
+		for _, serveur := range montés {
+			serveur.Close()
+		}
 	}
 	return config.Source{
 		Name:     "arte",
 		M3UURL:   publier(m3u),
 		XMLTVURL: publier(xmltv),
-	}
+	}, panne
 }
 
 // configE2E : config pleine pour les sources fournies, groupes vides (tout
@@ -93,7 +103,7 @@ func E2E(t *testing.T, cfg config.Config) *httptest.Server {
 	if err != nil {
 		t.Fatalf("ouverture du store : %v", err)
 	}
-	recette := httptest.NewServer(Nouveau(boutique).Handler())
+	recette := httptest.NewServer(Nouveau(boutique, func() config.Config { return cfg }).Handler())
 	t.Cleanup(recette.Close)
 	return recette
 }
@@ -148,7 +158,8 @@ func TestFroidSansSnapshot(t *testing.T) {
 // elle ne modifie jamais le snapshot, et un groupe absent donne une
 // playlist vide valide (#EXTM3U seul).
 func TestPrevisuGroupe(t *testing.T) {
-	cfg := configE2E(t, fournir(t, m3uPourE2E, xmltvPourE2E))
+	arte, _ := fournir(t, m3uPourE2E, xmltvPourE2E)
+	cfg := configE2E(t, arte)
 	passerUneFois(t, cfg)
 	recette := E2E(t, cfg)
 
@@ -200,13 +211,150 @@ https://flux.exemple.tld/bfm.m3u8
 	}
 }
 
+// TestStatutConforme : /api/status expose tout le champ du contrat — états
+// par source/artefact (last_ok/last_error/next_at), âge et compteurs du
+// snapshot, rss_bytes, ring des erreurs, résumé de config — plus les
+// champs d'IP publique encore vides, réservés au ticket suivant.
+func TestStatutConforme(t *testing.T) {
+	arte, _ := fournir(t, m3uPourE2E, xmltvPourE2E)
+	cfg := configE2E(t, arte)
+	passerUneFois(t, cfg)
+	recette := E2E(t, cfg)
+
+	code, entetes, corps := obtenir(t, recette.URL+"/api/status")
+	if code != http.StatusOK {
+		t.Fatalf("/api/status : code %d, voulu 200", code)
+	}
+	if type_ := entetes.Get("Content-Type"); type_ != "application/json; charset=utf-8" {
+		t.Errorf("/api/status : Content-Type %q, voulu application/json; charset=utf-8", type_)
+	}
+
+	var statut struct {
+		GeneratedAt string `json:"generated_at"`
+		Sources     map[string]struct {
+			M3U   etatArtefactJSON `json:"m3u"`
+			XMLTV etatArtefactJSON `json:"xmltv"`
+		} `json:"sources"`
+		Snapshot struct {
+			AgeSeconds    *int64         `json:"age_seconds"`
+			TotalChannels int            `json:"total_channels"`
+			PerGroup      map[string]int `json:"per_group"`
+		} `json:"snapshot"`
+		RssBytes          int64     `json:"rss_bytes"`
+		Errors            []erreur  `json:"errors"`
+		Config            resumeCfg `json:"config"`
+		PublicIPv4        string    `json:"public_ipv4"`
+		PublicIPv6        string    `json:"public_ipv6"`
+		PublicIPLastCheck *string   `json:"public_ip_last_check"`
+	}
+	if err := json.Unmarshal(corps, &statut); err != nil {
+		t.Fatalf("/api/status : corps non conforme : %v\n%s", err, corps)
+	}
+
+	if _, err := time.Parse(time.RFC3339, statut.GeneratedAt); err != nil {
+		t.Errorf("generated_at %q non RFC3339 : %v", statut.GeneratedAt, err)
+	}
+	etatArte := statut.Sources["arte"].M3U
+	if etatArte.LastOk == nil {
+		t.Error("sources.arte.m3u.last_ok manquant après une passe réussie")
+	}
+	if etatArte.NextAt == nil {
+		t.Error("sources.arte.m3u.next_at manquant après une passe réussie")
+	}
+	if statut.Sources["arte"].M3U.LastError != "" {
+		t.Errorf("sources.arte.m3u.last_error = %q, voulu vide après une passe réussie", statut.Sources["arte"].M3U.LastError)
+	}
+	if statut.Snapshot.AgeSeconds == nil || *statut.Snapshot.AgeSeconds < 0 {
+		t.Errorf("snapshot.age_seconds invalide : %v", statut.Snapshot.AgeSeconds)
+	}
+	if statut.Snapshot.TotalChannels != 2 {
+		t.Errorf("snapshot.total_channels = %d, voulu 2", statut.Snapshot.TotalChannels)
+	}
+	if statut.Snapshot.PerGroup["General"] != 1 || statut.Snapshot.PerGroup["News"] != 1 {
+		t.Errorf("snapshot.per_group = %v, voulu {General:1 News:1}", statut.Snapshot.PerGroup)
+	}
+	if statut.RssBytes <= 0 {
+		t.Errorf("rss_bytes = %d, voulu VmRSS > 0", statut.RssBytes)
+	}
+	if statut.Config.NbSources != 1 {
+		t.Errorf("config.nb_sources = %d, voulu 1", statut.Config.NbSources)
+	}
+	if statut.Config.RefreshInterval != "1h0m0s" {
+		t.Errorf("config.refresh_interval = %q, voulu 1h0m0s", statut.Config.RefreshInterval)
+	}
+	if statut.PublicIPv4 == "" || statut.PublicIPv6 == "" || statut.PublicIPLastCheck != nil {
+		t.Errorf("champs IP publique mal exposés (réservés au ticket publicip, valeurs « indisponible ») : %q %q %v",
+			statut.PublicIPv4, statut.PublicIPv6, statut.PublicIPLastCheck)
+	}
+	if statut.Errors == nil {
+		t.Error("errors absent (voulu [])")
+	}
+}
+
+// TestRingErreurs : les erreurs signalées au serveur sortent dans le ring
+// « errors » de /api/status, les plus récentes d'abord, plafonnées à 20.
+func TestRingErreurs(t *testing.T) {
+	boutique, err := store.Ouvrir(t.TempDir())
+	if err != nil {
+		t.Fatalf("ouverture du store : %v", err)
+	}
+	s := Nouveau(boutique, configVide)
+	for i := 0; i < 25; i++ {
+		s.SignalerErreur(fmt.Sprintf("échec %d", i))
+	}
+
+	recette := httptest.NewServer(s.Handler())
+	t.Cleanup(recette.Close)
+	_, _, corps := obtenir(t, recette.URL+"/api/status")
+
+	var statut struct {
+		Errors []struct {
+			At      string `json:"at"`
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(corps, &statut); err != nil {
+		t.Fatalf("/api/status non JSON : %v\n%s", err, corps)
+	}
+	if len(statut.Errors) != 20 {
+		t.Errorf("ring = %d entrées, voulu 20 (plafond)", len(statut.Errors))
+	}
+	if len(statut.Errors) > 0 && statut.Errors[0].Message != "échec 24" {
+		t.Errorf("ring : première entrée %q, voulu la plus récente \"échec 24\"", statut.Errors[0].Message)
+	}
+	if len(statut.Errors) > 0 && statut.Errors[0].At == "" {
+		t.Error("ring : entrée sans horodatage")
+	}
+}
+
+// configVide sert d'injecteur de config pour les tests sans scénario fetch.
+func configVide() config.Config { return config.Config{} }
+
+type etatArtefactJSON struct {
+	LastOk    *string `json:"last_ok"`
+	LastError string  `json:"last_error"`
+	NextAt    *string `json:"next_at"`
+}
+
+type erreur struct {
+	At      string `json:"at"`
+	Message string `json:"message"`
+}
+
+type resumeCfg struct {
+	RefreshInterval string `json:"refresh_interval"`
+	NbSources       int    `json:"nb_sources"`
+	NbGroupes       int    `json:"nb_groupes"`
+}
+
 // TestSnapshotServiOctetPourOctet : fournisseur OK, une passe, puis /m3u
 // et /xmltv servent le snapshot du disque — les octets servies sont
 // identiques au fichier snapshot, en-têtes de contenu et no-cache corrects
 // (story 22), Content-Length connu (taille du fichier, ADR-0001). Le M3U
 // est en plus identique au corps du fournisseur (aucune réécriture).
 func TestSnapshotServiOctetPourOctet(t *testing.T) {
-	cfg := configE2E(t, fournir(t, m3uPourE2E, xmltvPourE2E))
+	arte, _ := fournir(t, m3uPourE2E, xmltvPourE2E)
+	cfg := configE2E(t, arte)
 	passerUneFois(t, cfg)
 	recette := E2E(t, cfg)
 
@@ -252,3 +400,67 @@ func TestSnapshotServiOctetPourOctet(t *testing.T) {
 		}
 	}
 }
+
+// TestRepliSurSnapshotEchecFetch : le fournisseur tombe en panne après une
+// passe réussie ; la passe suivante échoue pour ses artefacts, le service
+// continue de servir le dernier bon snapshot — octet pour octet — et
+// /api/status le montre (last_error renseigné, last_ok figé) (story 9).
+func TestRepliSurSnapshotEchecFetch(t *testing.T) {
+	arte, panne := fournir(t, m3uPourE2E, xmltvPourE2E)
+	cfg := configE2E(t, arte)
+	passerUneFois(t, cfg)
+
+	boutique, err := store.Ouvrir(cfg.DataDir)
+	if err != nil {
+		t.Fatalf("ouverture du store : %v", err)
+	}
+	avant := map[string]string{
+		"m3u":   lireFichier(t, boutique.CheminSnapshot("m3u")),
+		"xmltv": lireFichier(t, boutique.CheminSnapshot("xmltv")),
+	}
+
+	// Panne du fournisseur : les upstreams fake sont fermés, toute URL de
+	// la config échoue désormais (connexion refusée).
+	panne()
+
+	passerUneFois(t, cfg)
+
+	recette := E2E(t, cfg)
+	for artefact, avantBytes := range avant {
+		code, _, corps := obtenir(t, recette.URL+"/"+artefact)
+		if code != http.StatusOK {
+			t.Errorf("%s : code %d, voulu 200 (repli sur le dernier bon snapshot)", artefact, code)
+		}
+		if string(corps) != avantBytes {
+			t.Errorf("%s : le repli a changé les octets servies", artefact)
+		}
+	}
+
+	_, _, corps := obtenir(t, recette.URL+"/api/status")
+	var statut struct {
+		Sources map[string]struct {
+			M3U   etatArtefactJSON `json:"m3u"`
+			XMLTV etatArtefactJSON `json:"xmltv"`
+		} `json:"sources"`
+	}
+	if err := json.Unmarshal(corps, &statut); err != nil {
+		t.Fatalf("/api/status non JSON : %v", err)
+	}
+	if statut.Sources["arte"].M3U.LastError == "" {
+		t.Error("sources.arte.m3u.last_error vide après la panne, voulu renseigné")
+	}
+	if statut.Sources["arte"].M3U.LastOk == nil {
+		t.Error("sources.arte.m3u.last_ok perdu par la panne, voulu la dernière réussite")
+	}
+}
+
+func lireFichier(t *testing.T, chemin string) string {
+	t.Helper()
+	brut, err := os.ReadFile(chemin)
+	if err != nil {
+		t.Fatalf("lecture de %s : %v", chemin, err)
+	}
+	return string(brut)
+}
+
+// TestFroidSansSnapshot : au démarrage, avant la première passe réussie,
