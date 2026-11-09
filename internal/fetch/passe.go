@@ -54,6 +54,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 			es.M3U.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
 			slog.Warn("fetch m3u en échec, copie figée", "source", src.Name, "erreur", erreur)
+			o.signaler(fmt.Sprintf("source %s : fetch m3u en échec, copie figée : %v", src.Name, erreur))
 			continue
 		}
 		erreur = o.boutique.EcrireCopie(src.Name, "m3u", func(w io.Writer) error {
@@ -64,6 +65,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 			es.M3U.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
 			slog.Warn("copie m3u en échec, copie figée", "source", src.Name, "erreur", erreur)
+			o.signaler(fmt.Sprintf("source %s : copie m3u en échec, copie figée : %v", src.Name, erreur))
 			continue
 		}
 		maintenant := o.horloge()
@@ -107,6 +109,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 			es.XMLTV.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
 			slog.Warn("fetch xmltv en échec, copie figée", "source", src.Name, "erreur", erreur)
+			o.signaler(fmt.Sprintf("source %s : fetch xmltv en échec, copie figée : %v", src.Name, erreur))
 			continue
 		}
 		erreur = o.boutique.EcrireCopie(src.Name, "xmltv", func(w io.Writer) error {
@@ -117,6 +120,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 			es.XMLTV.DerniereErreur = erreur.Error()
 			meta.Sources[src.Name] = es
 			slog.Warn("copie xmltv en échec, copie figée", "source", src.Name, "erreur", erreur)
+			o.signaler(fmt.Sprintf("source %s : copie xmltv en échec, copie figée : %v", src.Name, erreur))
 			continue
 		}
 		maintenant := o.horloge()

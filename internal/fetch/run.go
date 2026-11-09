@@ -2,6 +2,7 @@ package fetch
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -20,7 +21,7 @@ func (o *Ordonnanceur) Run(ctx context.Context, loader *config.Loader) {
 		slog.Error("chargement initial de la config impossible", "erreur", erreur)
 		return
 	}
-	if erreur := o.Passe(ctx, cfg); erreur != nil {
+	if erreur := o.passerEnSignalant(ctx, cfg); erreur != nil {
 		// Une passe peut avorter sur une erreur LOCALISÉE (balayage,
 		// publication) ; les erreurs par source sont tracées dans
 		// meta.json et la passe continue. Loguer ici suffit.
@@ -63,7 +64,7 @@ func (o *Ordonnanceur) boucler(ctx context.Context, loader *config.Loader, ticks
 				slog.Error("config illisible et aucune dernière bonne", "erreur", erreurRelue)
 				continue
 			}
-			if erreur := o.Passe(ctx, cfg); erreur != nil {
+			if erreur := o.passerEnSignalant(ctx, cfg); erreur != nil {
 				slog.Error("passe de fetch", "erreur", erreur)
 			}
 			// Les ticks tombés pendant la passe ne déclenchent rien : drain
@@ -86,4 +87,17 @@ func drainer(ticks <-chan time.Time) {
 			return
 		}
 	}
+}
+
+// passerEnSignalant enrobe Passe : l'erreur locale d'une passe (balayage,
+// reconstruction, lecture de l'état) est journalisée ICI — un seul site —
+// et signalée au signaleur injecté, comme les échecs par source le sont
+// depuis Passe. Le ring de /api/status reflète ainsi tout échec visible
+// dans les logs (story 15).
+func (o *Ordonnanceur) passerEnSignalant(ctx context.Context, cfg config.Config) error {
+	erreur := o.Passe(ctx, cfg)
+	if erreur != nil {
+		o.signaler(fmt.Sprintf("passe de fetch : %v", erreur))
+	}
+	return erreur
 }

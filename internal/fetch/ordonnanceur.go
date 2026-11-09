@@ -21,6 +21,12 @@ type Ordonnanceur struct {
 	fenetre       func(timeout time.Duration) Fetcher
 	retourArriere time.Duration
 	horloge       func() time.Time
+	// signaleur est OPTIONNEL (nil-safe, jamais forcé par Nouveau) : appelé
+	// aux sites d'échec déjà journalisés. Le câblage (main) y branche le
+	// ring d'erreurs du serveur : fetch ne connaît pas server, la
+	// dépendance est inversée par la callback (story 15 — recent-error
+	// ring).
+	signaleur func(string)
 }
 
 // Nouveau prépare l'ordonnanceur. retourArriere est le backoff fixe entre
@@ -33,6 +39,24 @@ func Nouveau(boutique *store.Store, fenetre func(timeout time.Duration) Fetcher,
 		fenetre:       fenetre,
 		retourArriere: retourArriere,
 		horloge:       time.Now,
+	}
+}
+
+// AvecSignaleur branche une callback d'échec (chaînable après Nouveau) :
+// elle sera invoquée à chaque échec journalisé — par source (fetch ou
+// copie en échec, copie figée) et pour chaque erreur de passe. f peut être
+// nil pour détacher, le champ est nil-safe partout.
+func (o *Ordonnanceur) AvecSignaleur(f func(string)) *Ordonnanceur {
+	o.signaleur = f
+	return o
+}
+
+// signaler transmet un message d'échec au signaleur s'il y en a un ; appelé
+// exactement aux sites où l'échec est déjà journalisé, le ring de /api/status
+// reflète donc ce que l'opérateur voit dans les logs.
+func (o *Ordonnanceur) signaler(message string) {
+	if o.signaleur != nil {
+		o.signaleur(message)
 	}
 }
 
