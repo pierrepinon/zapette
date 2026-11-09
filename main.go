@@ -58,15 +58,14 @@ func main() {
 	// service reste disponible pendant les fetchs, jamais l'inverse.
 	// Le résolveur IP externe : fetch écho v4/v6 en arrière-plan, au
 	// démarrage puis à chaque tick, timeout 5 s, jamais bloquant. Il lit la
-	// config via un loader DÉDIÉ (Relire n'est pas exclusive : deux
-	// instances gardent chacune leur dernière bonne, le fichier reste la
-	// source de vérité) et son état est exposé par /api/status via une
-	// callback — publicip ne connaît jamais server, comme fetch. La fenêtre
-	// réseau est la MÊME FABRIQUE que fetch (même sémantique de timeout par
-	// tentative), adaptée au Fetcher local de publicip.
-	// Un échec réseau (offline) le laisse en « indisponible » : le service
-	// continue, le processus ne dépend pas de la résolution.
-	resolveur := publicip.Nouveau(configCourante(config.NewLoader(cheminConfig())),
+	// config via le MÊME loader que l'ordonnanceur et /api/status
+	// (loader.Relire est sûr en concurrence — le mutex du paquet config) et
+	// expose son état par callback — publicip ne connaît jamais server, ni
+	// fetch. La fenêtre réseau est la MÊME FABRIQUE que fetch (même
+	// sémantique de timeout par tentative), adaptée au Fetcher local de
+	// publicip. Un échec réseau (offline) le laisse en « indisponible » :
+	// le service continue, le processus ne dépend pas de la résolution.
+	resolveur := publicip.Nouveau(configCourante(loader),
 		func(timeout time.Duration) publicip.Fetcher { return publicip.Fetcher(fetch.NouveauFetcher(timeout)) })
 	serveur := server.Nouveau(boutique, configCourante(loader)).AvecPublicIP(resolveur.Etat)
 	httpServ, ecouteur, err := demarrerHTTP(adresseEcoute(cfg), serveur.Handler())
