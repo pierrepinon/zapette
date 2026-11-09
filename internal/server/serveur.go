@@ -17,6 +17,9 @@ package server
 
 import (
 	"encoding/json"
+	"fmt"
+	"io"
+	"log/slog"
 	"net/http"
 	"os"
 
@@ -60,13 +63,45 @@ func reponse503(w http.ResponseWriter, message string) {
 }
 
 // servirM3U sert le snapshot M3U fusionné.
-func (s *Serveur) servirM3U(w http.ResponseWriter, _ *http.Request) {
-	reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
+func (s *Serveur) servirM3U(w http.ResponseWriter, r *http.Request) {
+	servirArtefact(w, s.boutique.CheminSnapshot("m3u"), "audio/x-mpegurl; charset=utf-8")
 }
 
 // servirXMLTV sert le snapshot XMLTV fusionné.
 func (s *Serveur) servirXMLTV(w http.ResponseWriter, _ *http.Request) {
-	reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
+	servirArtefact(w, s.boutique.CheminSnapshot("xmltv"), "application/xml; charset=utf-8")
+}
+
+// servirArtefact sert un fichier du disque en streaming : io.Copy depuis le
+// fichier ouvert, jamais tout l'artefact en RAM (ADR-0001). Content-Length
+// est connu d'avance (taille du fichier) ; le no-cache garantit que le
+// lecteur reçoit toujours le snapshot frais. Sans fichier (démarrage à
+// froid, avant la première passe réussie) : 503 JSON explicite (story 10).
+func servirArtefact(w http.ResponseWriter, chemin, typeContenu string) {
+	snapshot, err := os.Open(chemin)
+	if err != nil {
+		if os.IsNotExist(err) {
+			reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
+			return
+		}
+		slog.Error("ouverture du snapshot impossible", "fichier", chemin, "erreur", err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+	defer snapshot.Close()
+
+	info, err := snapshot.Stat()
+	if err != nil {
+		slog.Error("stat du snapshot impossible", "fichier", chemin, "erreur", err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", typeContenu)
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Content-Length", fmt.Sprintf("%d", info.Size()))
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.Copy(w, snapshot)
 }
 
 // statut répond GET /api/status : le contrat JSON du dashboard.
@@ -74,12 +109,4 @@ func (s *Serveur) statut(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 	_ = json.NewEncoder(w).Encode(map[string]string{})
-}
-
-// verrou snapshot existe-t-il ? — utilisé par les handlers pour distinguer
-// démarrage à froid (503) d'un artefact servable. Un os.Stat suffit : le
-// renommage atomique du store garantit qu'un fichier présent est complet.
-func snapshotPresent(chemin string) bool {
-	_, err := os.Stat(chemin)
-	return err == nil
 }
