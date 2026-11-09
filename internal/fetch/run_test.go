@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -81,57 +82,79 @@ func TestRunFetchAuDemarragePuisAuxTicks(t *testing.T) {
 	}
 }
 
-// TestRunTickSautePendantUnePasse : une passe plus longue que l'intervalle
-// ne provoque jamais de fetch en parallèle — les ticks qui tombent pendant
-// une passe sont sautés. Chaque m3u dure ~100 ms, les ticks sont à 20 ms :
-// sans saut, ~25 passes se chevaucheraient ; attendu ~4 passes séquentielles,
-// parallélisme maximal 1.
-func TestRunTickSautePendantUnePasse(t *testing.T) {
-	serveurLent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		time.Sleep(100 * time.Millisecond)
+// TestBouclerSauteLesTicksTombesPendantLaPasse : un tick qui tombe pendant
+// une passe est VIDÉ (drain non bloquant) — il ne déclenche pas de passe
+// immédiate à la fin de la passe ; le fetch suivant attend un tick neuf.
+// Jamais de passes dos à dos : le fournisseur n'est pas martelé. Test
+// déterministe : le canal de ticks est injecté, la passe est bloquée par
+// un capot (gate).
+func TestBouclerSauteLesTicksTombesPendantLaPasse(t *testing.T) {
+	capot := make(chan struct{})
+	ouvrirCapot := sync.OnceFunc(func() { close(capot) })
+	entrées := make(chan struct{}, 8)
+	serveurM3U := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		entrées <- struct{}{}
+		<-capot // la passe reste en cours tant que le capot est fermé
 		_, _ = w.Write([]byte(arteM3UCorps))
 	}))
-	t.Cleanup(serveurLent.Close)
+	t.Cleanup(serveurM3U.Close)
+	t.Cleanup(ouvrirCapot)
 	b, dir := nouvelleBoutique(t)
-	chemin := ecrireFichierDepot(t, dir, "20ms", serveurLent.URL)
-
-	var enCours, maximum, appels atomic.Int64
-	o := Nouveau(b, func(timeout time.Duration) Fetcher {
-		interne := NouveauFetcher(timeout)
-		return func(ctx context.Context, url string) (io.ReadCloser, error) {
-			appels.Add(1)
-			n := enCours.Add(1)
-			for {
-				vu := maximum.Load()
-				if n <= vu || maximum.CompareAndSwap(vu, n) {
-					break
-				}
-			}
-			defer enCours.Add(-1)
-			return interne(ctx, url)
-		}
-	}, 0, 1*time.Millisecond)
+	chemin := ecrireFichierDepot(t, dir, "1h", serveurM3U.URL)
+	o := Nouveau(b, NouveauFetcher, 0, 1*time.Millisecond)
 	loader := config.NewLoader(chemin)
+
+	ticks := make(chan time.Time, 1) // tampon 1 : comme un Ticker
+	resets := atomic.Int64{}
 
 	ctx, annule := context.WithCancel(context.Background())
 	termine := make(chan struct{})
-	go func() { o.Run(ctx, loader); close(termine) }()
+	go func() { o.boucler(ctx, loader, ticks, func(time.Duration) { resets.Add(1) }); close(termine) }()
 
-	time.Sleep(400 * time.Millisecond)
+	// Tick 1 : la passe démarre et attend sur le capot.
+	ticks <- time.Now()
+	select {
+	case <-entrées:
+	case <-time.After(2 * time.Second):
+		t.Fatal("la passe n'a pas démarré au premier tick")
+	}
+	// Tick 2 tombe PENDANT la passe : retenu par le tampon (comme un
+	// vrai Ticker de tampon 1).
+	ticks <- time.Now()
+
+	// Fin de la passe : meta.json, écrit EN DERNIER, la signe.
+	ouvrirCapot()
+	attendre(t, "meta.json après la passe", func() bool {
+		_, erreur := os.Stat(filepath.Join(dir, "meta.json"))
+		return erreur == nil
+	})
+
+	// Le tick 2 devait être VIDÉ : aucune seconde passe immédiate.
+	select {
+	case <-entrées:
+		t.Fatal("seconde passe déclenchée à la fin de la passe : le tick tombé pendant la passe n'a pas été vidé")
+	case <-time.After(150 * time.Millisecond):
+	}
+
+	// Tick NEUF : la passe suivante démarre normalement.
+	ticks <- time.Now()
+	attendre(t, "passe déclenchée par le tick neuf", func() bool {
+		select {
+		case <-entrées:
+			return true
+		default:
+			return false
+		}
+	})
+
 	annule()
 	select {
 	case <-termine:
 	case <-time.After(2 * time.Second):
-		t.Fatal("Run ne s'est pas arrêté")
+		t.Fatal("boucler ne s'est pas arrêté à l'annulation")
 	}
-
-	if maximum.Load() != 1 {
-		t.Errorf("fetchs en parallèle : %d, attendu 1 (passe strictement séquentielle)", maximum.Load())
-	}
-	// Entre les passes lentes de ~100 ms (m3u+xmltv = 2 fetchs) sur 400 ms,
-	// attendu au moins 2 passes ; le saut des ticks borne le comptage haut.
-	if passes := appels.Load() / 2; passes < 2 || passes > 10 {
-		t.Errorf("passes : %d, attendu ~4 (ticks sautés pendant les passes)", passes)
+	if resets.Load() != 2 {
+		t.Errorf("resets du ticker : %d, attendu 2 (deux passes, intervalle relu à chaque tick)", resets.Load())
 	}
 }
 
@@ -316,3 +339,17 @@ type residu struct {
 }
 
 func (r *residu) Error() string { return "temporaire résiduel : " + r.nom }
+
+// attendre guette jusqu'à ce que condition devienne vraie (poll court),
+// avec une borne ferme — les pollings de tests ne doivent jamais pendre.
+func attendre(t *testing.T, quoi string, condition func() bool) {
+	t.Helper()
+	échéance := time.Now().Add(2 * time.Second)
+	for time.Now().Before(échéance) {
+		if condition() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("attendu %s dans le délai", quoi)
+}
