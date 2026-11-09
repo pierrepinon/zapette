@@ -5,9 +5,11 @@
 # Données runtime : copies de source et snapshots
 /data/
 
-# Frontend (dashboard embarqué)
+# Frontend (dashboard embarqué) : dépendances npm seulement. Le build de
+# production frontend/dist/ est COMMITTÉ : c'est lui que embed.FS embarque
+# (frontend/embed.go), le binaire se construit (et se teste) sur un clone
+# vierge sans toolkit Node.
 node_modules/
-dist/
 
 # Éditeurs et OS
 *.swp
