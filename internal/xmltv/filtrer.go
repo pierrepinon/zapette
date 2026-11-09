@@ -91,7 +91,12 @@ func Filtrer(entree io.Reader, sortie io.Writer, retenus map[string]struct{}) er
 
 // retenu dit si l'entrée est retenue : son identifiant de chaîne (l'attribut
 // id d'un canal, l'attribut channel d'un programme) doit figurer dans
-// retenus. Un ensemble vide retient tout le guide.
+// retenus. Un ensemble vide ne retient rien : côté M3U, vide porte sur la
+// LISTE DE GROUPES (entrée du filtre) ; côté XMLTV, l'entrée est déjà
+// l'ENSEMBLE DES CHAINES RETENUES ; vide = « aucune chaîne n'a survécu » et
+// garder tout violerait la user story 3. La symétrie utile se fait au
+// niveau du ticket #5 (allowed_groups vide → toutes les identités retenues →
+// ensemble non vide transmis).
 func retenu(element xml.StartElement, retenus map[string]struct{}) bool {
 	identifiant := attribut(element, "id")
 	if identifiant == "" {

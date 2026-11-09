@@ -10,9 +10,11 @@ import (
 
 // margeRSS est l'augmentation de RSS tolérée pour le filtrage d'un gros
 // guide : le filtre doit rester streaming, quelle que soit la taille du
-// guide (ADR-0001). Le filtre mesuré dépasse rarement quelques Mio ; une
-// accumulation des programmes dépasserait largement cette marge.
-const margeRSS = 16 << 20
+// guide (ADR-0001). La carte de dédup (une entrée par programme, ~110 octets
+// pour 100 000 programmes, soit ~12 Mio) et les travaux du parseur (buffers
+// de décodage/encodage, ~8 Mio) composent la marge : ce qui NE doit PAS
+// croître, c'est le document lui-même — jamais tout le guide en RAM.
+const margeRSS = 32 << 20
 
 // lectureRSS lit la RAM effectivement occupée par le processus de test
 // (VmRSS de /proc/self/status), en octets.

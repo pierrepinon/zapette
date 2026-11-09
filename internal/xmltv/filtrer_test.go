@@ -2,6 +2,8 @@ package xmltv
 
 import (
 	"encoding/xml"
+	"fmt"
+	"io"
 	"strings"
 	"testing"
 )
@@ -86,23 +88,51 @@ func TestFiltrerTolèreUnGuideRompé(t *testing.T) {
 	}
 }
 
-// TestFiltrerMemoireConstante vérifie le budget RSS du filtre sur un gros
-// guide : la mémoire ne doit pas croître avec le nombre de programmes.
-func TestFiltrerMemoireConstante(t *testing.T) {
-	const programmes = 100_000
-	sortie := &strings.Builder{}
-	var entree strings.Builder
-	entree.WriteString(`<?xml version="1.0" encoding="UTF-8"?>` + "\n<tv>\n")
-	for i := 0; i < programmes; i++ {
-		entree.WriteString(`<programme start="20240101120000 +0100" channel="c1.fr"><title>Film</title></programme>` + "\n")
-	}
-	entree.WriteString("</tv>\n")
+// generateurGuide est un io.Reader qui synthétise les programmes à la
+// volée : jamais tous en mémoire en même temps, pour que la mesure ne
+// contienne que le filtre et pas le document d'essai (ADR-0001).
+type generateurGuide struct {
+	restantes int
+}
 
+func (g *generateurGuide) Read(p []byte) (int, error) {
+	if g.restantes == 0 {
+		return 0, io.EOF
+	}
+	texte := fmt.Sprintf(`<programme start="202401%06d" channel="c1.fr"><title>Film</title></programme>`+"\n", g.restantes)
+	g.restantes--
+	return copy(p, texte), nil
+}
+
+// TestFiltrerMemoireConstante vérifie le budget RSS du filtre sur un gros
+// guide : la mémoire ne doit pas croître avec le nombre de programmes. La
+// carte de dédup (une entrée par programme, métadonnée admise par ADR-0001)
+// est le terme dominant de la mesure ; le budget complet est arbitré au
+// ticket #9.
+func TestFiltrerMemoireConstante(t *testing.T) {
 	avant := lectureRSS(t)
-	if err := Filtrer(strings.NewReader(entree.String()), sortie, map[string]struct{}{"c1.fr": {}}); err != nil {
+	if err := Filtrer(&generateurGuide{restantes: 100_000}, io.Discard, map[string]struct{}{"c1.fr": {}}); err != nil {
 		t.Fatalf("Filtrer : %v", err)
 	}
 	if après := lectureRSS(t); après-avant > margeRSS {
-		t.Errorf("RSS : %d octets de plus après le filtrage d'un guide de %d programmes", après-avant, programmes)
+		t.Errorf("RSS : %d octets de plus après le filtrage d'un guide de %d programmes", après-avant, 100_000)
+	}
+}
+
+// TestFiltrerSansChaineRetenue épingle le comportement d'un ensemble de
+// chaînes retenues vide : aucune entrée de guide ne passe, seul le
+// squelette du document (déclaration, doctype, racine <tv>) est transmis.
+func TestFiltrerSansChaineRetenue(t *testing.T) {
+	squelette := &strings.Builder{}
+	if err := Filtrer(strings.NewReader(guide), squelette, map[string]struct{}{}); err != nil {
+		t.Fatalf("Filtrer : %v", err)
+	}
+	for _, interdit := range []string{"<channel", "<programme", "bein1.fr"} {
+		if strings.Contains(squelette.String(), interdit) {
+			t.Errorf("un ensemble vide de retenus ne doit rien garder : %s passé", interdit)
+		}
+	}
+	if !strings.Contains(squelette.String(), "<tv") {
+		t.Errorf("le squelette <tv> doit rester : %s", squelette.String())
 	}
 }
