@@ -47,9 +47,15 @@ function clé(url: string): string {
   return `${offset}|${limit}|${groupe}`;
 }
 
-/** Dépôt clé canonique → corps. */
+/** Dépôt clé canonique → corps. Signature épousant typeof fetch (overloads). */
 function dépôt(corps: Record<string, RéponseCanaux>) {
-  return vi.fn(async (url: string) => {
+  return vi.fn(async (entrée: RequestInfo | URL): Promise<Response> => {
+    const url =
+      typeof entrée === 'string'
+        ? entrée
+        : entrée instanceof URL
+          ? entrée.toString()
+          : entrée.url;
     const trouvé = corps[clé(url)];
     if (!trouvé) {
       throw new Error(`requête inattendue : ${url}`);
@@ -162,7 +168,7 @@ describe('créerCanaux — store de la vue Chaînes', () => {
 
   it('erreur : état « erreur », message explicite, les données précédentes restent affichées', async () => {
     let échoue = false;
-    const requête = vi.fn(async (url: string) => {
+    const requête = vi.fn(async (_entrée: RequestInfo | URL): Promise<Response> => {
       if (échoue) {
         return {
           ok: false,
@@ -170,7 +176,7 @@ describe('créerCanaux — store de la vue Chaînes', () => {
           json: async () => ({ erreur: 'aucun snapshot' }),
         } as unknown as Response;
       }
-      return dépôt({ [clé(url)]: page })(url);
+      return dépôt({ [clé(String(_entrée))]: page })(_entrée);
     });
     const canaux = créerCanaux({ requête });
     await canaux.charger();
