@@ -1,0 +1,89 @@
+name: Release
+
+# Déclenché UNIQUEMENT par push de tag vX.Y.Z (pattern ^v[0-9]).
+# Recette de release : re-joue la validation complète (ci.yml), cross-compile
+# les binaires linux amd64 + arm64, les signe cosign keyless et publie la
+# GitHub Release avec checksums et signatures.
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: read
+
+jobs:
+  recette:
+    # Même ligne de recette que la CI : tests Go, vet, gofmt, frontend
+    # (npm ci + Vitest + build + dérive dist) et harnais d'acceptance.
+    name: Recette (ci.yml rejouée)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Outils mise (Go et Node épinglés via mise.toml)
+        uses: jdx/mise-action@9bd7bdac63b2e349f5b13444b55aec6f6f774ff9 # v2
+
+      - name: Recette complète (Go, frontend, harnais, dérive dist)
+        run: ./scripts/release.sh
+
+  binaires:
+    name: Binaires linux amd64 + arm64, signés cosign, GitHub Release
+    runs-on: ubuntu-latest
+    needs: recette
+    permissions:
+      contents: write # attachement des artefacts à la GitHub Release
+      id-token: write # cosign keyless (OIDC du runner)
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Outils mise (Go et Node épinglés via mise.toml)
+        uses: jdx/mise-action@9bd7bdac63b2e349f5b13444b55aec6f6f774ff9 # v2
+
+      - name: Cross-compile linux amd64 + arm64 (CGO_ENABLED=0)
+        run: |
+          set -eu
+          for arch in amd64 arm64; do
+            mkdir -p "dist/zapette-linux-${arch}"
+            CGO_ENABLED=0 GOOS=linux GOARCH="${arch}" \
+              go build -trimpath \
+              -ldflags "-s -w -X main.version=${GITHUB_REF_NAME}" \
+              -o "dist/zapette-linux-${arch}/zapette" .
+            cp README.md LICENSE CHANGELOG.md "dist/zapette-linux-${arch}/"
+            tar -C "dist/zapette-linux-${arch}" -czf \
+              "dist/zapette-${GITHUB_REF_NAME#v}-linux-${arch}.tar.gz" \
+              zapette README.md LICENSE CHANGELOG.md
+          done
+
+      - name: SHA256SUMS des binaires
+        run: |
+          cd dist
+          sha256sum zapette-*.tar.gz > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Installer cosign (sigstore)
+        uses: sigstore/cosign-installer@fb28c2b6339dcd94da6e4cbcbc5e888961f6f8c3 # v3.9.0
+
+      - name: Signer cosign keyless (binaires + SHA256SUMS)
+        run: |
+          set -eu
+          for artefact in dist/*.tar.gz dist/SHA256SUMS; do
+            cosign sign-blob --yes \
+              --bundle "${artefact}.bundle" \
+              --output-signature "${artefact}.sig" \
+              --output-certificate "${artefact}.pem" \
+              "${artefact}"
+          done
+
+      - name: Publier la GitHub Release (vérifiée, notes générées)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            --verify-tag \
+            --generate-notes \
+            --title "zapette ${GITHUB_REF_NAME}"
+          gh release upload "${GITHUB_REF_NAME}" \
+            dist/*.tar.gz dist/SHA256SUMS dist/*.bundle dist/*.sig dist/*.pem

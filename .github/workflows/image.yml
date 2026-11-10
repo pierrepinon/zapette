@@ -19,6 +19,7 @@ on:
 permissions:
   contents: read
   packages: write
+  id-token: write # cosign keyless (signature de l'image publiée)
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
@@ -67,8 +68,24 @@ jobs:
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          provenance: true
+          provenance: mode=max
           sbom: true
+
+      - name: Installer cosign (sigstore)
+        uses: sigstore/cosign-installer@fb28c2b6339dcd94da6e4cbcbc5e888961f6f8c3 # v3.9.0
+
+      - name: Signer cosign keyless l'image publiée (par digest)
+        env:
+          IMAGE: ghcr.io/${{ github.repository }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          cosign sign --yes "${IMAGE}@${DIGEST}"
+          cosign verify \
+            --certificate-identity-regexp '^https://github.com/pierrepinon/zapette/' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${IMAGE}@${DIGEST}" > /dev/null
+          echo "Image ghcr.io/pierrepinon/zapette@${DIGEST} signée cosign keyless (attestations provenance mode=max + SBOM)."
+
 
       - name: Digest publié
         run: echo "ghcr.io/pierrepinon/zapette@${{ steps.build.outputs.digest }}"
