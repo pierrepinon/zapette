@@ -33,6 +33,7 @@ import (
 	"github.com/pierrepinon/zapette/frontend"
 	"github.com/pierrepinon/zapette/internal/config"
 	"github.com/pierrepinon/zapette/internal/m3u"
+	"github.com/pierrepinon/zapette/internal/publicip"
 	"github.com/pierrepinon/zapette/internal/store"
 )
 
@@ -58,6 +59,12 @@ type Serveur struct {
 	verrou    sync.Mutex
 	clefCache string // "taille:modtime" du snapshot.m3u déjà compté
 	compteurs compteursSnapshot
+
+	// lireIP est OPTIONNEL (nil-safe, jamais forcé par Nouveau) : lecteur
+	// de l'état du résolveur IP externe (publicip.Resolver.Etat en
+	// production, branché par le câblage main). Dépendance inversée par la
+	// callback : server ne pilote pas le résolveur, il en lit l'état.
+	lireIP func() publicip.Etat
 }
 
 type compteursSnapshot struct {
@@ -83,6 +90,16 @@ func Nouveau(boutique *store.Store, lireConfig func() config.Config) *Serveur {
 		horloge:    time.Now,
 		page:       page,
 	}
+}
+
+// AvecPublicIP branche le lecteur de l'état du résolveur IP externe
+// (chaînable après Nouveau) : ses valeurs alimentent public_ipv4,
+// public_ipv6 et public_ip_last_check de /api/status. f peut être nil pour
+// détacher, le champ est nil-safe (le contrat « indisponible »/null est
+// alors servi tel quel).
+func (s *Serveur) AvecPublicIP(f func() publicip.Etat) *Serveur {
+	s.lireIP = f
+	return s
 }
 
 // Handler assemble le routeur public : les artefacts servis et l'API de
@@ -287,6 +304,19 @@ func (s *Serveur) statut(w http.ResponseWriter, _ *http.Request) {
 			NbSources:       len(cfg.Sources),
 			NbGroupes:       len(cfg.AllowedGroups),
 		}
+	}
+
+	if s.lireIP != nil {
+		etat := s.lireIP()
+		if etat.DerniereVerification != nil {
+			utc := etat.DerniereVerification.UTC().Format(time.RFC3339)
+			reponse.PublicIPLastCheck = &utc
+		}
+		// Sans vérification réussie (échec réseau, offline, jamais lancé),
+		// l'état du résolveur porte déjà « indisponible » : le format du
+		// contrat ne change jamais, seules les valeurs deviennent réelles.
+		reponse.PublicIPv4 = etat.IPv4
+		reponse.PublicIPv6 = etat.IPv6
 	}
 
 	reponse.Snapshot = s.compteSnapshot()

@@ -13,6 +13,7 @@ import (
 
 	"github.com/pierrepinon/zapette/internal/config"
 	"github.com/pierrepinon/zapette/internal/fetch"
+	"github.com/pierrepinon/zapette/internal/publicip"
 	"github.com/pierrepinon/zapette/internal/server"
 	"github.com/pierrepinon/zapette/internal/store"
 )
@@ -55,7 +56,18 @@ func main() {
 	// /api/status. L'ordonnanceur tourne en arrière-plan, Run bloque jusqu'à
 	// l'arrêt (SIGINT/SIGTERM), le serveur s'éteint ensuite proprement — le
 	// service reste disponible pendant les fetchs, jamais l'inverse.
-	serveur := server.Nouveau(boutique, configCourante(loader))
+	// Le résolveur IP externe : fetch écho v4/v6 en arrière-plan, au
+	// démarrage puis à chaque tick, timeout 5 s, jamais bloquant. Il lit la
+	// config via le MÊME loader que l'ordonnanceur et /api/status
+	// (loader.Relire est sûr en concurrence — le mutex du paquet config) et
+	// expose son état par callback — publicip ne connaît jamais server, ni
+	// fetch. La fenêtre réseau est la MÊME FABRIQUE que fetch (même
+	// sémantique de timeout par tentative), adaptée au Fetcher local de
+	// publicip. Un échec réseau (offline) le laisse en « indisponible » :
+	// le service continue, le processus ne dépend pas de la résolution.
+	resolveur := publicip.Nouveau(configCourante(loader),
+		func(timeout time.Duration) publicip.Fetcher { return publicip.Fetcher(fetch.NouveauFetcher(timeout)) })
+	serveur := server.Nouveau(boutique, configCourante(loader)).AvecPublicIP(resolveur.Etat)
 	httpServ, ecouteur, err := demarrerHTTP(adresseEcoute(cfg), serveur.Handler())
 	if err != nil {
 		slog.Error("écoute impossible", "adresse", cfg.ServerAddr, "erreur", err)
@@ -69,6 +81,7 @@ func main() {
 	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
 		AvecSignaleur(serveur.SignalerErreur)
 	go ordonnanceur.Run(ctx, loader)
+	go resolveur.Run(ctx)
 	<-ctx.Done()
 	slog.Info("arrêt demandé, extinctions en cours")
 
