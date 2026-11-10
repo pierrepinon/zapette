@@ -10,6 +10,13 @@ type Chaine struct {
 	TvgID string
 	// Groupe est l'attribut group-title de la ligne #EXTINF, vide s'il est absent.
 	Groupe string
+	// TvgChno est l'attribut tvg-chno de la ligne #EXTINF (numéro de chaîne
+	// tel que publié par le fournisseur, jamais réinterprété en entier —
+	// c'est une chaîne brute), vide s'il est absent ou vide.
+	TvgChno string
+	// TvgLogo est l'attribut tvg-logo de la ligne #EXTINF (URL d'origine du
+	// fournisseur, jamais proxifiée), vide s'il est absent ou vide.
+	TvgLogo string
 	// Nom est le nom affiché de la chaîne, après le premier domaine
 	// (ou la virgule de séparateur) de la ligne #EXTINF.
 	Nom string

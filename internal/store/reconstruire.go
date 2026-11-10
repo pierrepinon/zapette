@@ -33,6 +33,16 @@ func (s *Store) Reconstruire(copiesM3U, copiesXMLTV []string) error {
 			return fmt.Errorf("publication du snapshot.xmltv : %w", err)
 		}
 	}
+	// canaux.json : une entrée par chaîne retenue, avec la provenance
+	// déduite PAR LE MERGE (issue #11). Comme les snapshots ci-dessus, il
+	// n'est publié que si des copies M3U existent ; les copies XMLTV
+	// absentes sont simplement ignorées. Écrit ICI, donc AVANT meta.json :
+	// meta reste le DERNIER artefact de la passe (étape 4 de fetch.Passe).
+	if len(copiesM3U) > 0 {
+		if err := s.EcrireCanaux(copiesM3U, copiesXMLTV); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

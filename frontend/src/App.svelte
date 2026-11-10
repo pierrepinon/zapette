@@ -9,8 +9,26 @@
   import { formatDurée, formatDuréeGo, formatHorodatage, formatOctets } from './lib/format';
   import Carte from './lib/composantes/Carte.svelte';
   import BasculeTheme from './lib/composantes/BasculeTheme.svelte';
+  import Canaux from './lib/composantes/Canaux.svelte';
 
   const statut = créerStatut();
+
+  /* Routing par hash (issue #11) : #/ = dashboard, #/canaux = vue Chaînes ;
+     tout autre hash reste le dashboard (fourre-tout, comme la route « / »
+     du serveur). Le store de statut vit ici, AU-DESSUS des vues : le poll
+     continue pendant la vue Chaînes (ses groupes alimentent le sélecteur
+     de filtre) et il n'est pas couper/détruit à chaque navigation. */
+  function vueCourante(): 'tableau' | 'canaux' {
+    return window.location.hash === '#/canaux' ? 'canaux' : 'tableau';
+  }
+  let vue = $state(vueCourante());
+  const suivreLaHach = (): void => {
+    vue = vueCourante();
+  };
+  /** Groupes triés du snapshot : options du sélecteur de filtre de la vue
+      Chaînes ('' du M3U sans groupe n'est PAS une option : un groupe
+      vide n'est pas un groupe, cf. les compteurs de /api/status). */
+  const optionsGroupes = $derived(statut.groupes.map((g) => g.nom));
 
   /** Les deux artefacts d'une source, sous forme plate pour la boucle
       {#each} imbriquée du tableau (typage explicite de la paire). */
@@ -36,6 +54,8 @@
   const libelléÉtat = (état: string) =>
     état === 'ok' ? 'Connecté' : état === 'erreur' ? 'Rafraîchissement en échec' : 'Chargement';
 </script>
+
+<svelte:window onhashchange={suivreLaHach} />
 
 <div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
   <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
@@ -67,11 +87,38 @@
           {statut.ipv6 ?? '—'}
         </p>
       </div>
+      <nav
+        aria-label="Navigation principale"
+        class="inline-flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-700"
+      >
+        <a
+          href="#/"
+          aria-current={vue === 'tableau' ? 'page' : undefined}
+          class="px-3 py-1.5 text-sm font-medium transition-colors
+            {vue === 'tableau'
+              ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}"
+        >
+          Dashboard
+        </a>
+        <a
+          href="#/canaux"
+          aria-current={vue === 'canaux' ? 'page' : undefined}
+          class="px-3 py-1.5 text-sm font-medium transition-colors
+            {vue === 'canaux'
+              ? 'bg-indigo-600 text-white dark:bg-indigo-500'
+              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}"
+        >
+          Chaînes
+        </a>
+      </nav>
       <BasculeTheme />
     </div>
   </header>
 
-  {#if statut.état === 'erreur'}
+  {#if vue === 'canaux'}
+    <Canaux groupes={optionsGroupes} />
+  {:else if statut.état === 'erreur'}
     <div
       role="alert"
       class="mb-6 rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-800 dark:border-red-500/40 dark:bg-red-950/40 dark:text-red-300"
@@ -87,7 +134,7 @@
     </div>
   {/if}
 
-  {#if statut.données}
+  {#if vue !== 'canaux' && statut.données}
     <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <Carte titre="Snapshot">
         <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
@@ -82,8 +83,13 @@ func appliquerDefauts(cfg *Config) {
 }
 
 // valider exige les champs sans valeur par défaut raisonnables : un intervalle
-// de rafraîchissement strictement positif et, pour chaque source, un nom (clé
-// des copies de source sur disque) et une URL M3U.
+// de rafraîchissement strictement positif et, pour chaque source, un nom
+// SÛR COMME CLÉ — le name est injecté tel quel dans les chemins de copie
+// (sources/<name>.m3u|.xmltv) par le store : un séparateur / ou \ y ferait
+// atterrir la copie HORS du répertoire sources/ (filepath.Join remonte sur
+// un ../x, CreateTemp échouerait confusément dans un sous-répertoire
+// absent) et « . »/« .. » n'ont aucun sens de clé ; ce name est aussi la
+// provenance affichée au dashboard (issue #11).
 func valider(cfg *Config) error {
 	if cfg.RefreshInterval <= 0 {
 		return fmt.Errorf("refresh_interval doit être une durée strictement positive, obtenu %q", cfg.RefreshInterval)
@@ -91,6 +97,9 @@ func valider(cfg *Config) error {
 	for i, source := range cfg.Sources {
 		if source.Name == "" {
 			return fmt.Errorf("sources[%d] : name manquant", i)
+		}
+		if strings.ContainsAny(source.Name, `/\`) || source.Name == "." || source.Name == ".." {
+			return fmt.Errorf("sources[%d] : name %q invalide : séparateurs de chemin (/ ou \\) et « . »/« .. » exclus, le name sert de clé aux copies de source sur disque", i, source.Name)
 		}
 		if source.M3UURL == "" {
 			return fmt.Errorf("sources[%d] (%s) : m3u_url manquant", i, source.Name)

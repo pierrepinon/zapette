@@ -67,3 +67,60 @@ https://miroir.tld/cnews.m3u8
 		t.Errorf("fusion dédup, sortie :\n%s\nattendu :\n%s", sortie.String(), attendu)
 	}
 }
+
+// TestBalayerAttributsPublication épingle l'exposition des attributs du
+// ticket « page Chaînes » (#11) : tvg-chno et tvg-logo sont analysés comme
+// les attributs existants (tvg-id, group-title), sans que le consommateur
+// (le store) ne repare la ligne #EXTINF à la main.
+func TestBalayerAttributsPublication(t *testing.T) {
+	source := `#EXTM3U
+#EXTINF:-1 tvg-id="arte.fr" tvg-chno="4" tvg-logo="https://img.tld/arte.png" group-title="Généralistes",Arte
+https://flux.tld/arte.m3u8
+#EXTINF:-1 tvg-chno="" tvg-logo="" group-title="Local",Sans
+https://flux.tld/sans.m3u8
+#EXTINF:-1 tvg-id="nue.fr",Nue
+https://flux.tld/nue.m3u8
+`
+
+	var reçues []Chaine
+	if err := Balayer(strings.NewReader(source), nil, func(c Chaine, _ []string) error {
+		reçues = append(reçues, c)
+		return nil
+	}); err != nil {
+		t.Fatalf("Balayer : %v", err)
+	}
+
+	if len(reçues) != 3 {
+		t.Fatalf("3 chaînes attendues, obtenu %d", len(reçues))
+	}
+
+	cas := []struct {
+		nom     string
+		tvgChno string
+		tvgLogo string
+		tvgID   string
+		groupe  string
+		nomAff2 string
+	}{
+		{"Arte", "4", "https://img.tld/arte.png", "arte.fr", "Généralistes", "Arte"},
+		{"Sans", "", "", "", "Local", "Sans"},
+		{"Nue", "", "", "nue.fr", "", "Nue"},
+	}
+	for i, c := range cas {
+		if reçues[i].TvgChno != c.tvgChno {
+			t.Errorf("%s : TvgChno %q, attendu %q", c.nom, reçues[i].TvgChno, c.tvgChno)
+		}
+		if reçues[i].TvgLogo != c.tvgLogo {
+			t.Errorf("%s : TvgLogo %q, attendu %q", c.nom, reçues[i].TvgLogo, c.tvgLogo)
+		}
+		if reçues[i].TvgID != c.tvgID {
+			t.Errorf("%s : TvgID %q, attendu %q", c.nom, reçues[i].TvgID, c.tvgID)
+		}
+		if reçues[i].Groupe != c.groupe {
+			t.Errorf("%s : Groupe %q, attendu %q", c.nom, reçues[i].Groupe, c.groupe)
+		}
+		if reçues[i].Nom != c.nomAff2 {
+			t.Errorf("%s : Nom %q, attendu %q", c.nom, reçues[i].Nom, c.nomAff2)
+		}
+	}
+}
