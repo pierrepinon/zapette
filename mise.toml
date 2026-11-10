@@ -1,3 +1,6 @@
 [tools]
 go = "1.27.3"
 node = "24.22.2"
+# Requis par go test -race (CGO) : même compilateur en local et en CI
+# (job go-race de .github/workflows/ci.yml), suivi par Renovate.
+clang = "23.1.4"

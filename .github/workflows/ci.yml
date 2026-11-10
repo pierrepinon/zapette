@@ -96,10 +96,8 @@ jobs:
       - name: Outils mise (Go épinglé)
         uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
 
-      # -race exige CGO : clang est présent sur les runners ubuntu-latest,
-      # on l'installe seulement s'il manque.
-      - name: Clang (CGO requis par -race)
-        run: command -v clang >/dev/null || { sudo apt-get update && sudo apt-get install -y --no-install-recommends clang; }
-
       - name: Tests avec race detector
+        # -race exige CGO : clang est épinglé dans mise.toml (même outil
+        # qu'en local), installé par mise-action ci-dessus — pas d'apt-get
+        # non épinglé.
         run: CGO_ENABLED=1 CC=clang go test -race ./... -count=1
