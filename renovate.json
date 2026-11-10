@@ -1,0 +1,31 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:pinDigests",
+    "helpers:pinGitHubActionDigests"
+  ],
+  "managers": ["mise", "npm", "github-actions", "dockerfile"],
+  "timezone": "Europe/Paris",
+  "schedule": ["before 7am on monday"],
+  "labels": ["dependencies"],
+  "prHourlyLimit": 5,
+  "packageRules": [
+    {
+      "description": "Les actions GitHub sont regroupées dans une seule PR.",
+      "matchManagers": ["github-actions"],
+      "groupName": "actions GitHub"
+    },
+    {
+      "description": "Les images de conteneurs (digests Dockerfile inclus) sont regroupées.",
+      "matchManagers": ["dockerfile"],
+      "groupName": "images de conteneurs"
+    },
+    {
+      "description": "Les dépendances npm de dev (tout le frontend) sont regroupées.",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["devDependencies"],
+      "groupName": "npm dev"
+    }
+  ]
+}

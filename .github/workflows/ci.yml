@@ -1,0 +1,103 @@
+# CI Zapette : frontend (build + détection de dérive de dist/), puis Go
+# (tests, vet, gofmt, build statique embarquant le frontend).
+#
+# Les outils viennent de mise.toml (Go et Node épinglés) via mise-action.
+# Les actions sont épinglées par SHA de commit ; Renovate (manager
+# github-actions) les met à jour en conservant le commentaire de version.
+name: CI
+
+on:
+  push:
+    branches: [main, "integration/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  frontend:
+    name: Frontend — build et dérive dist/
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Outils mise (Node épinglé)
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: npm ci
+        working-directory: frontend
+        run: npm ci
+
+      - name: Tests Vitest
+        working-directory: frontend
+        run: npm test
+
+      - name: Build de production
+        working-directory: frontend
+        run: npm run build
+
+      # frontend/dist/ est committé : c'est lui que embed.FS embarque
+      # (frontend/embed.go). Le build de production doit donc reproduire
+      # exactement le dist committé — tout écart fait échouer le job.
+      - name: Détection de dérive de frontend/dist
+        run: |
+          if ! git diff --exit-code -- frontend/dist; then
+            echo "::error::frontend/dist/ déroge au build de production — relance 'npm run build' dans frontend/ et commite le résultat."
+            exit 1
+          fi
+
+  go:
+    name: Go — tests, vet, fmt, build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Outils mise (Go épinglé)
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: Tests
+        run: go test ./... -count=1
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Format (gofmt)
+        run: |
+          non_formatte=$(gofmt -l .)
+          if [ -n "$non_formatte" ]; then
+            echo "::error::Fichiers non formatés (gofmt -w) :"
+            echo "$non_formatte"
+            exit 1
+          fi
+
+      - name: Build statique (frontend embarqué)
+        run: CGO_ENABLED=0 go build -trimpath -o zapette .
+
+      # Le dist/ est compilé dans le binaire par embed.FS : on vérifie que
+      # la page du dashboard s'y trouve bien (titre de dist/index.html).
+      - name: Le binaire embarque le frontend
+        run: grep -aq 'zapette — statut' zapette
+
+  # Le détecteur de course (/race) a déjà attrapé une data race réelle
+  # (Loader) : il reste dans la CI. Il exige CGO (CGO_ENABLED=1 + clang) ;
+  # les tests à budget RSS sont remplacés par des skips sous -race via les
+  # tags de build standard (memoire_test.go //go:build !race doublé par
+  # memoire_race_test.go //go:build race) — le budget réel reste certifié
+  # par le harnais d'acceptance sur binaire de production.
+  go-race:
+    name: Go — tests avec race detector
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: Outils mise (Go épinglé)
+        uses: jdx/mise-action@c37c93293d6b742fc901e1406b8f764f6fb19dac # v2
+
+      - name: Tests avec race detector
+        # -race exige CGO : clang est épinglé dans mise.toml (même outil
+        # qu'en local), installé par mise-action ci-dessus — pas d'apt-get
+        # non épinglé.
+        run: CGO_ENABLED=1 CC=clang go test -race ./... -count=1

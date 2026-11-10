@@ -1,0 +1,16 @@
+# Contexte de build minimal : le binaire n'a besoin que du module Go et du
+# frontend/dist/ committé (embarqué par embed.FS à la compilation).
+.git
+.github
+data/
+node_modules/
+frontend/node_modules/
+frontend/src/
+frontend/*.json
+frontend/*.ts
+frontend/*.js
+frontend/index.html
+*.md
+docker-compose.yml
+zapette
+zapette-*

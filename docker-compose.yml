@@ -1,0 +1,41 @@
+# Exemple de déploiement Zapette derrière un reverse proxy.
+#
+# Aucune authentification dans Zapette : le proxy frontal (Caddy, nginx,
+# …) fait l'authentification et l'exposition ; Zapette n'écoute que sur
+# localhost (ou un réseau Docker interne).
+#
+# Note : le service `debug` (profil « debug ») n'est PAS démarré par
+# `docker compose up` — il ne sert qu'à ouvrir un shell sur les données.
+# Son image distroless épinglée par digest est suivie par Renovate.
+services:
+  zapette:
+    image: ghcr.io/pierrepinon/zapette:latest
+    # En production, épinglez le digest publié par le workflow Image
+    # (sortie `digest` du job) :
+    # image: ghcr.io/pierrepinon/zapette@sha256:<digest>
+    restart: unless-stopped
+    environment:
+      ZAPETTE_CONFIG: /config/config.yaml
+      # Secrets injectés par l'environnement, développés via ${VAR} dans
+      # le config.yaml — jamais en clair dans le fichier.
+      IPTV_A_M3U_URL: ${IPTV_A_M3U_URL}
+      IPTV_A_XMLTV_URL: ${IPTV_A_XMLTV_URL:?renseignez les URL du fournisseur}
+    volumes:
+      - ./config.yaml:/config/config.yaml:ro
+      - zapette-data:/data
+    ports:
+      # Localhost uniquement : seul le reverse proxy expose le service.
+      - "127.0.0.1:8080:8080"
+
+  debug:
+    image: gcr.io/distroless/static-debian12:debug-nonroot@sha256:d5563cc7f2f44313f332e91138cc8c6a158899afeeeab2fce3b0f9ccdb3cf9ee
+    profiles: ["debug"]
+    entrypoint: ["/busybox/sh"]
+    stdin_open: true
+    tty: true
+    user: "65532:65532"
+    volumes:
+      - zapette-data:/data:ro
+
+volumes:
+  zapette-data:

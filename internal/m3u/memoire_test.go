@@ -1,3 +1,10 @@
+// Tests à budget RSS (ADR-0001) : exclus sous le runtime race (-race),
+// dont l'instrumentation mémoire gonfle le RSS et rend la mesure non
+// significative. Sous -race, ce fichier est remplacé par memoire_race_test.go
+// qui skip ces tests ; le budget réel reste certifié par le harnais
+// d'acceptance sur binaire de production.
+//go:build !race
+
 package m3u
 
 import (
