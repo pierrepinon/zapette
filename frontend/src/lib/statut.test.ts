@@ -29,6 +29,7 @@ const statutOK: RéponseStatut = {
   public_ipv4: '203.0.113.7',
   public_ipv6: 'indisponible',
   public_ip_last_check: '2025-11-10T07:40:30Z',
+  version: 'dev',
 };
 
 function réponse(corps: unknown, ok = true, status = 200): Response {
@@ -58,6 +59,8 @@ describe('créerStatut — poll /api/status', () => {
     expect(statut.état).toBe('chargement');
     statut.démarrer();
     await vi.advanceTimersByTimeAsync(1);
+    // version exposée du contrat, présente même à froid (défaut « dev »).
+    expect(statut.données?.version).toBe('dev');
 
     expect(statut.état).toBe('ok');
     expect(statut.données).toEqual(statutOK);

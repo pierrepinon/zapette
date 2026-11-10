@@ -311,5 +311,6 @@
       <span class="font-medium tabular-nums">{formatHorodatage(statut.dernièreVérificationIP)}</span>
     </p>
     <p>Zapette filtre et ressert le M3U/XMLTV ; il ne proxifie jamais les flux.</p>
+    <p>Version : <span class="font-medium tabular-nums">{statut.données?.version ?? 'dev'}</span></p>
   </footer>
 </div>

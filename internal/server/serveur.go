@@ -60,6 +60,9 @@ type Serveur struct {
 	clefCache string // "taille:modtime" du snapshot.m3u déjà compté
 	compteurs compteursSnapshot
 
+	// version : le stamp de version du binaire — « dev » par défaut,
+	// valeur réelle quand le câblage main passe la var version au serveur.
+	version string
 	// lireIP est OPTIONNEL (nil-safe, jamais forcé par Nouveau) : lecteur
 	// de l'état du résolveur IP externe (publicip.Resolver.Etat en
 	// production, branché par le câblage main). Dépendance inversée par la
@@ -90,6 +93,14 @@ func Nouveau(boutique *store.Store, lireConfig func() config.Config) *Serveur {
 		horloge:    time.Now,
 		page:       page,
 	}
+}
+
+// AvecVersion passe la version réelle au serveur (chaînable après
+// Nouveau) : /api/status l'expose, le dashboard l'affiche au footer. La
+// valeur « dev » du constructeur reste le défaut sans câblage main.
+func (s *Serveur) AvecVersion(v string) *Serveur {
+	s.version = v
+	return s
 }
 
 // AvecPublicIP branche le lecteur de l'état du résolveur IP externe
@@ -264,6 +275,7 @@ type resumeConfig struct {
 
 type statutStatus struct {
 	GeneratedAt       string                      `json:"generated_at"`
+	Version           string                      `json:"version"`
 	Sources           map[string]etatSourceStatus `json:"sources"`
 	Snapshot          snapshotStatus              `json:"snapshot"`
 	RssBytes          int64                       `json:"rss_bytes"`
@@ -285,8 +297,13 @@ func (s *Serveur) statut(w http.ResponseWriter, _ *http.Request) {
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache")
 
+	versionDÉfaut := "dev"
+	if s.version != "" {
+		versionDÉfaut = s.version
+	}
 	reponse := statutStatus{
 		GeneratedAt:       s.horloge().UTC().Format(time.RFC3339),
+		Version:           versionDÉfaut,
 		Sources:           map[string]etatSourceStatus{},
 		Config:            resumeConfig{RefreshInterval: "0s"},
 		PublicIPv4:        "indisponible",

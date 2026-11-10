@@ -26,6 +26,11 @@ func cheminConfig() string {
 	return "./config.yaml"
 }
 
+// version est le stamp de version du binaire : « dev » par défaut, remplacé
+// par -ldflags "-X main.version=vX.Y.Z" à la construction de release. Le
+// serveur l'expose tel quel sur /api/status, le dashboard l'affiche au footer.
+var version = "dev"
+
 func main() {
 	slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, nil)))
 
@@ -67,7 +72,7 @@ func main() {
 	// le service continue, le processus ne dépend pas de la résolution.
 	resolveur := publicip.Nouveau(configCourante(loader),
 		func(timeout time.Duration) publicip.Fetcher { return publicip.Fetcher(fetch.NouveauFetcher(timeout)) })
-	serveur := server.Nouveau(boutique, configCourante(loader)).AvecPublicIP(resolveur.Etat)
+	serveur := server.Nouveau(boutique, configCourante(loader)).AvecPublicIP(resolveur.Etat).AvecVersion(version)
 	// L'adresse d'écoute vient UNIQUEMENT de la config (server_addr, défaut
 	// [::]:8080 appliqué à la lecture) : une ressource = un chemin. L'env
 	// n'y entre que par l'expansion ${ZAPETTE_ADDR} du fichier de config.
