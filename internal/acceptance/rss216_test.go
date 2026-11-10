@@ -103,7 +103,12 @@ func TestAcceptationRSS216k(t *testing.T) {
 		selection.Add(1)
 		go func(chemin string) {
 			defer selection.Done()
-			client := serveur.Client()
+			// Copie du client partagé : httptest.Server.Client() renvoie
+			// toujours le même pointeur ; écrire Timeout dessus pendant que
+			// la goroutine principale l'utilise serait une data race (le
+			// champ Timeout est lu à chaque requête). Le Transport partagé,
+			// lui, n'est jamais muté : il reste sûr en concurrence.
+			client := *serveur.Client()
 			client.Timeout = 30 * time.Second
 			for {
 				select {
