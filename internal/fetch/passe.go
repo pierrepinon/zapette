@@ -51,10 +51,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 		es.M3U = amorcer(es.M3U, suivant)
 		corps, erreur := o.recuperer(ctx, fetch, src.M3UURL, cfg.FetchRetries)
 		if erreur != nil {
-			es.M3U.DerniereErreur = erreur.Error()
-			meta.Sources[src.Name] = es
-			slog.Warn("fetch m3u en échec, copie figée", "source", src.Name, "erreur", erreur)
-			o.signaler(fmt.Sprintf("source %s : fetch m3u en échec, copie figée : %v", src.Name, erreur))
+			o.echecCopieFigee(meta.Sources, src.Name, es, es.M3U, "fetch m3u", erreur)
 			continue
 		}
 		erreur = o.boutique.EcrireCopie(src.Name, "m3u", func(w io.Writer) error {
@@ -62,10 +59,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 		})
 		corps.Close()
 		if erreur != nil {
-			es.M3U.DerniereErreur = erreur.Error()
-			meta.Sources[src.Name] = es
-			slog.Warn("copie m3u en échec, copie figée", "source", src.Name, "erreur", erreur)
-			o.signaler(fmt.Sprintf("source %s : copie m3u en échec, copie figée : %v", src.Name, erreur))
+			o.echecCopieFigee(meta.Sources, src.Name, es, es.M3U, "copie m3u", erreur)
 			continue
 		}
 		maintenant := o.horloge()
@@ -106,10 +100,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 		}
 		corps, erreur := o.recuperer(ctx, fetch, src.XMLTVURL, cfg.FetchRetries)
 		if erreur != nil {
-			es.XMLTV.DerniereErreur = erreur.Error()
-			meta.Sources[src.Name] = es
-			slog.Warn("fetch xmltv en échec, copie figée", "source", src.Name, "erreur", erreur)
-			o.signaler(fmt.Sprintf("source %s : fetch xmltv en échec, copie figée : %v", src.Name, erreur))
+			o.echecCopieFigee(meta.Sources, src.Name, es, es.XMLTV, "fetch xmltv", erreur)
 			continue
 		}
 		erreur = o.boutique.EcrireCopie(src.Name, "xmltv", func(w io.Writer) error {
@@ -117,10 +108,7 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 		})
 		corps.Close()
 		if erreur != nil {
-			es.XMLTV.DerniereErreur = erreur.Error()
-			meta.Sources[src.Name] = es
-			slog.Warn("copie xmltv en échec, copie figée", "source", src.Name, "erreur", erreur)
-			o.signaler(fmt.Sprintf("source %s : copie xmltv en échec, copie figée : %v", src.Name, erreur))
+			o.echecCopieFigee(meta.Sources, src.Name, es, es.XMLTV, "copie xmltv", erreur)
 			continue
 		}
 		maintenant := o.horloge()
@@ -139,6 +127,18 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 
 	// 4) meta.json EN DERNIER.
 	return o.boutique.EcrireMeta(meta)
+}
+
+// echecCopieFigee enregistre l'échec d'un artefact d'une source (les quatre
+// sites de la passe : fetch/copie × m3u/xmltv) : last_error posé dans l'état
+// (persisté par EcrireMeta en toute fin de passe), journalisation et
+// signalement au ring /api/status ; les autres sources continuent et la
+// dernière bonne copie de celle-ci reste servie — « copie figée ».
+func (o *Ordonnanceur) echecCopieFigee(meta map[string]store.EtatSource, source string, etatSource store.EtatSource, artefact *store.EtatArtefact, site string, err error) {
+	artefact.DerniereErreur = err.Error()
+	meta[source] = etatSource
+	slog.Warn(site+" en échec, copie figée", "source", source, "erreur", err)
+	o.signaler(fmt.Sprintf("source %s : %s en échec, copie figée : %v", source, site, err))
 }
 
 // amorcer amorce l'état d'un artefact pour la passe : last_error repart à
