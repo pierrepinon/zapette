@@ -5,7 +5,7 @@
     "docker:pinDigests",
     "helpers:pinGitHubActionDigests"
   ],
-  "managers": ["mise", "npm", "github-actions", "dockerfile"],
+  "enabledManagers": ["mise", "npm", "github-actions", "dockerfile"],
   "timezone": "Europe/Paris",
   "schedule": ["before 7am on monday"],
   "labels": ["dependencies"],
