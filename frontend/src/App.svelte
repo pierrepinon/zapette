@@ -57,64 +57,78 @@
 
 <svelte:window onhashchange={suivreLaHach} />
 
-<div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-10">
-  <header class="mb-6 flex flex-wrap items-start justify-between gap-3">
-    <div>
-      <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-slate-50">
-        zapette
-      </h1>
-      <p class="mt-1 flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
-        <span
-          role="status"
-          aria-live="polite"
-          class="inline-block size-2.5 rounded-full {classeBadge(statut.état)}"
-        ></span>
-        {libelléÉtat(statut.état)}
-        {#if statut.dernierReçu > 0}
-          — dernière réponse {formatHorodatage(new Date(statut.dernierReçu).toISOString())}
-        {/if}
-      </p>
-    </div>
-    <div class="flex flex-wrap items-start justify-end gap-x-6 gap-y-3">
-      <div class="text-left sm:text-right">
-        <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
-          IP publique
-        </p>
-        <p class="mt-0.5 font-mono text-lg font-semibold text-slate-900 dark:text-slate-50">
-          {statut.ipv4 ?? '—'}
-        </p>
-        <p class="font-mono text-sm text-slate-600 dark:text-slate-400">
-          {statut.ipv6 ?? '—'}
-        </p>
-      </div>
-      <nav
-        aria-label="Navigation principale"
-        class="inline-flex overflow-hidden rounded-lg border border-slate-300 dark:border-slate-700"
-      >
+<!-- Navbar pleine largeur, collée en haut : brand + vues + IP publique +
+     bascule de thème. Le blur garde le contenu lisible au défilement. -->
+<nav
+  aria-label="Navigation principale"
+  class="sticky top-0 z-20 border-b border-slate-200/80 bg-white/85 backdrop-blur dark:border-slate-800 dark:bg-slate-950/85"
+>
+  <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2.5 sm:px-6">
+    <a
+      href="#/"
+      class="flex items-center gap-2 text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50"
+    >
+      <img src="/favicon.svg" alt="" class="size-7" />
+      zapette
+    </a>
+    <ul class="flex items-center gap-1">
+      <li>
         <a
           href="#/"
           aria-current={vue === 'tableau' ? 'page' : undefined}
-          class="px-3 py-1.5 text-sm font-medium transition-colors
+          class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
             {vue === 'tableau'
               ? 'bg-indigo-600 text-white dark:bg-indigo-500'
-              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}"
+              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
         >
           Dashboard
         </a>
+      </li>
+      <li>
         <a
           href="#/canaux"
           aria-current={vue === 'canaux' ? 'page' : undefined}
-          class="px-3 py-1.5 text-sm font-medium transition-colors
+          class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors
             {vue === 'canaux'
               ? 'bg-indigo-600 text-white dark:bg-indigo-500'
-              : 'bg-white text-slate-700 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800'}"
+              : 'text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800'}"
         >
           Chaînes
         </a>
-      </nav>
+      </li>
+    </ul>
+    <div class="ml-auto flex flex-wrap items-center justify-end gap-x-5 gap-y-2">
+      <div class="text-left sm:text-right">
+        <p class="text-[10px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          IP publique
+        </p>
+        <p class="font-mono text-sm font-semibold leading-tight text-slate-900 dark:text-slate-50">
+          {statut.ipv4 ?? '—'}
+        </p>
+        <p class="font-mono text-xs leading-tight text-slate-600 dark:text-slate-400">
+          {statut.ipv6 ?? '—'}
+        </p>
+      </div>
       <BasculeTheme />
     </div>
-  </header>
+  </div>
+</nav>
+
+<div class="mx-auto max-w-6xl px-4 py-6 sm:px-6 lg:py-8">
+  {#if vue === 'tableau'}
+    <h1 class="sr-only">Statut du service</h1>
+  {/if}
+  <p class="mb-6 flex flex-wrap items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+    <span
+      role="status"
+      aria-live="polite"
+      class="inline-block size-2.5 rounded-full {classeBadge(statut.état)}"
+    ></span>
+    {libelléÉtat(statut.état)}
+    {#if statut.dernierReçu > 0}
+      — dernière réponse {formatHorodatage(new Date(statut.dernierReçu).toISOString())}
+    {/if}
+  </p>
 
   {#if vue === 'canaux'}
     <Canaux groupes={optionsGroupes} />
