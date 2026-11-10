@@ -1,8 +1,8 @@
-// Package xmltv : parseur/filtre XMLTV en streaming. Le guide est lu token
-// par token depuis un io.Reader et repassé tel quel vers la sortie ; seules
-// les chaînes (<channel>) et les programmes (<programme>) retenus sont
-// émis, avec toute leur descendance. La mémoire reste constante quelle que
-// soit la taille du guide : jamais tout le guide en RAM (ADR-0001).
+// Package xmltv : parseur/filtre XMLTV en streaming. Le guide est balayé
+// token par token depuis un io.Reader et repassé tel quel vers la sortie ;
+// seules les chaînes (<channel>) et les programmes (<programme>) retenus
+// sont émis, avec toute leur descendance. La mémoire reste constante quelle
+// que soit la taille du guide : jamais tout le guide en RAM (ADR-0001).
 package xmltv
 
 import (
@@ -10,81 +10,60 @@ import (
 	"io"
 )
 
-// cleProgramme est la clé de déduplication d'un programme : le couple
+// CleProgramme est la clé de déduplication d'un programme : le couple
 // (identifiant de chaîne, start). Deux programmes de même clé sont des
-// doublons : le premier arrivé est conservé.
-type cleProgramme struct {
-	identifiant string
-	start       string
+// doublons ; côté Filtrer comme côté fusion du store (Reconstruire), le
+// premier arrivé est conservé. C'est la clé partagée des deux machines —
+// l'ancienne copie du store a été éliminée au profit de celle-ci.
+type CleProgramme struct {
+	Chaine string
+	Start  string
 }
 
 // Filtrer lit le guide XMLTV depuis entree et écrit dans sortie la version
 // filtrée : tout le document passe token par token, sauf les chaînes et les
 // programmes dont l'identifiant ne figure pas dans retenus — eux sont jetés
 // avec toute leur descendance. La déclaration XML, le doctype et tout ce
-// qui n'est pas une entrée de guide passe tel quel. Le décodage est
-// tolérant : un guide rompu au milieu n'est pas une erreur, la partie
-// lisible est filtrée puis transmise, sans crash.
+// qui n'est pas une entrée de guide passe tel quel — Balayer transmet la
+// racine et sa fermeture, et le réencodage du parseur normalise l'écriture.
+// Le décodage est tolérant : un guide rompu au milieu n'est pas une erreur,
+// la partie lisible est filtrée puis transmise, sans crash.
 func Filtrer(entree io.Reader, sortie io.Writer, retenus map[string]struct{}) error {
-	var (
-		decodeur = xml.NewDecoder(entree)
-		encodeur = xml.NewEncoder(sortie)
-		jeter    int // profondeur restante au-dessous d'une entrée rejetée
-		vus      = make(map[cleProgramme]struct{}, len(retenus))
-	)
-	for {
-		token, err := decodeur.Token()
-		if err == io.EOF {
-			return encodeur.Flush()
-		}
-		if err != nil {
-			// Guide rompu ou malformé : la partie lisible a déjà été
-			// filtrée, on la garde et on s'arrête proprement.
-			if _, malForme := err.(*xml.SyntaxError); malForme {
-				break
-			}
-			return err
-		}
-
-		if jeter > 0 {
-			// Au-dessous d'une entrée rejetée : compter pour retrouver la
-			// fin de l'entrée rejetée, sans rien émettre.
-			switch token.(type) {
-			case xml.StartElement:
-				jeter++
-			case xml.EndElement:
-				jeter--
-			}
-			continue
-		}
-
-		if debut, ouvert := token.(xml.StartElement); ouvert {
+	encodeur := xml.NewEncoder(sortie)
+	vus := make(map[CleProgramme]struct{}, len(retenus))
+	_, erreur := Balayer(entree,
+		// Racine : émise telle quelle, sa descendance est balayée ensuite.
+		func(racine xml.StartElement) error {
+			return encodeur.EncodeToken(racine)
+		},
+		// Chaînes (retenues par l'ensemble) et programmes (dédup par
+		// (chaîne, start), premier arrivé conservé).
+		func(debut xml.StartElement) (bool, error) {
 			switch debut.Name.Local {
-			case "channel", "programme":
+			case "channel":
+				return retenu(debut, retenus), nil
+			case "programme":
 				if !retenu(debut, retenus) {
-					// L'entrée entière est jetée, sa racine comprise.
-					jeter = 1
-					continue
+					return false, nil
 				}
-				if debut.Name.Local == "programme" {
-					// Dédup : un programme déjà vu (même chaîne, même
-					// start) est jeté, le premier arrivé ayant été
-					// conservé.
-					cle := cleProgramme{
-						identifiant: attribut(debut, "channel"),
-						start:       attribut(debut, "start"),
-					}
-					if _, dejaVu := vus[cle]; dejaVu {
-						jeter = 1
-						continue
-					}
-					vus[cle] = struct{}{}
+				cle := CleProgramme{
+					Chaine: Attribut(debut, "channel"),
+					Start:  Attribut(debut, "start"),
 				}
+				if _, dejaVu := vus[cle]; dejaVu {
+					return false, nil
+				}
+				vus[cle] = struct{}{}
+				return true, nil
 			}
-		}
-		if err := encodeur.EncodeToken(token); err != nil {
-			return err
-		}
+			return true, nil
+		},
+		func(token xml.Token) error {
+			return encodeur.EncodeToken(token)
+		},
+	)
+	if erreur != nil {
+		return erreur
 	}
 	return encodeur.Flush()
 }
@@ -98,17 +77,17 @@ func Filtrer(entree io.Reader, sortie io.Writer, retenus map[string]struct{}) er
 // niveau du ticket #5 (allowed_groups vide → toutes les identités retenues →
 // ensemble non vide transmis).
 func retenu(element xml.StartElement, retenus map[string]struct{}) bool {
-	identifiant := attribut(element, "id")
+	identifiant := Attribut(element, "id")
 	if identifiant == "" {
-		identifiant = attribut(element, "channel")
+		identifiant = Attribut(element, "channel")
 	}
 	_, retenu := retenus[identifiant]
 	return retenu
 }
 
-// attribut extrait la valeur d'un attribut quoté d'un élément XML, vide s'il
-// est absent.
-func attribut(element xml.StartElement, nom string) string {
+// Attribut extrait la valeur d'un attribut d'un élément XML, vide s'il est
+// absent.
+func Attribut(element xml.StartElement, nom string) string {
 	for _, attr := range element.Attr {
 		if attr.Name.Local == nom {
 			return attr.Value

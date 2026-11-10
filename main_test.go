@@ -3,27 +3,58 @@ package main
 import (
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/pierrepinon/zapette/internal/config"
 )
 
-// TestAdresseEcoute : l'adresse d'écoute suit la config (server_addr,
-// défaut [::]:8080) et ZAPETTE_ADDR la priorise — la variable
-// d'environnement est le moyen de surcharger sans éditer le fichier.
-func TestAdresseEcoute(t *testing.T) {
-	t.Setenv("ZAPETTE_ADDR", "")
-
-	if adresse := adresseEcoute(config.Config{}); adresse != "[::]:8080" {
-		t.Errorf("défaut : %q, voulu [::]:8080", adresse)
+// TestServerAddrCheminUnique : une ressource = un chemin (motif de l'issue
+// #1) — l'adresse d'écoute vient UNIQUEMENT de la config (server_addr, défaut
+// [::]:8080 appliqué par config.Load) ; ZAPETTE_ADDR n'y entre que par
+// l'expansion ${ZAPETTE_ADDR} du fichier, JAMAIS par une relecture directe
+// de l'env dans main. Un ${ZAPETTE_ADDR} non défini est une erreur de
+// chargement, pas un retour au défaut.
+func TestServerAddrCheminUnique(t *testing.T) {
+	fichier := filepath.Join(t.TempDir(), "config.yaml")
+	configYAML := "refresh_interval: 6h\nsources:\n  - name: provider-a\n    m3u_url: https://exemple.tld/playlist.m3u\nserver_addr: \"[::]:9999\"\n"
+	if err := os.WriteFile(fichier, []byte(configYAML), 0o600); err != nil {
+		t.Fatalf("écriture de la config : %v", err)
 	}
-	if adresse := adresseEcoute(config.Config{ServerAddr: "[::]:9999"}); adresse != "[::]:9999" {
-		t.Errorf("adresse de config : %q, voulu [::]:9999", adresse)
+
+	t.Setenv("ZAPETTE_ADDR", "[::]:7777") // ne DOIT pas être relu par main
+	cfg, err := config.Load(fichier)
+	if err != nil {
+		t.Fatalf("Load : %v", err)
+	}
+	if cfg.ServerAddr != "[::]:9999" {
+		t.Errorf("server_addr : %q, voulu [::]:9999 (l'env ne s'applique que par l'expansion du fichier)", cfg.ServerAddr)
 	}
 
-	t.Setenv("ZAPETTE_ADDR", "[::]:7777")
-	if adresse := adresseEcoute(config.Config{ServerAddr: "[::]:9999"}); adresse != "[::]:7777" {
-		t.Errorf("env prioritaire : %q, voulu [::]:7777", adresse)
+	// La clé absente : le défaut s'applique à la lecture.
+	sansAdresse := filepath.Join(t.TempDir(), "config.yaml")
+	defautYAML := "refresh_interval: 6h\nsources:\n  - name: provider-a\n    m3u_url: https://exemple.tld/playlist.m3u\n"
+	if err := os.WriteFile(sansAdresse, []byte(defautYAML), 0o600); err != nil {
+		t.Fatalf("écriture de la config : %v", err)
+	}
+	cfg, err = config.Load(sansAdresse)
+	if err != nil {
+		t.Fatalf("Load (sans server_addr) : %v", err)
+	}
+	if cfg.ServerAddr != "[::]:8080" {
+		t.Errorf("server_addr défaut : %q, voulu [::]:8080", cfg.ServerAddr)
+	}
+
+	// La clé présente mais développée d'une variable indéfinie : ERREUR de
+	// chargement, pas un retour au défaut.
+	avecVariable := filepath.Join(t.TempDir(), "config.yaml")
+	variableYAML := "refresh_interval: 6h\nserver_addr: ${ZAPETTE_NON_DEFINIE}\n"
+	if err := os.WriteFile(avecVariable, []byte(variableYAML), 0o600); err != nil {
+		t.Fatalf("écriture de la config : %v", err)
+	}
+	if _, err := config.Load(avecVariable); err == nil {
+		t.Errorf("${ZAPETTE_NON_DEFINIE} devait être une erreur de chargement, pas un défaut")
 	}
 }
 

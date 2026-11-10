@@ -165,6 +165,9 @@ func (r *Resolver) boucler(ctx context.Context, ticks <-chan time.Time, reinitia
 
 // drainer vide non bloquamment un canal de ticks : les ticks tombés pendant
 // une passe sont jetés, la prochaine résolution attend un tick neuf.
+// Dupliqué assumé (revue #12) avec le drainer de fetch/run.go : même
+// sémantique de drain de ticker, deux paquets sans dépendance partagée —
+// les deux commentaires se renvoient l'un à l'autre.
 func (r *Resolver) drainer(ticks <-chan time.Time) {
 	for {
 		select {

@@ -7,6 +7,7 @@ import (
 	"os"
 
 	"github.com/pierrepinon/zapette/internal/m3u"
+	"github.com/pierrepinon/zapette/internal/xmltv"
 )
 
 // Reconstruire réassemble le snapshot fusionné par fusion streaming des
@@ -83,25 +84,26 @@ func fusionnerM3U(copies []string, sortie io.Writer) error {
 	return nil
 }
 
-// cleProgramme est la clé de dédup d'un programme de guide : le couple
-// (chaîne, start) — même convention que xmltv.Filtrer au sein d'une copie.
-type cleProgramme struct {
-	chaine string
-	start  string
-}
-
-// fusionnerXMLTV réassemble les guides sous une seule racine <tv> : la
-// déclaration XML et la racine du premier arrivé, puis les enfants de
-// chaque copie, chaînes et programmes dédupliqués first-wins. Une copie
-// rompue au milieu n'est pas une erreur : la partie lisible est fusionnée
-// et on passe à la copie suivante (même tolérance que xmltv.Filtrer).
+// fusionnerXMLTV réassemble les guides sous une seule racine <tv> : déclaration
+// XML, DOCTYPE et racine du premier arrivé, puis les enfants de chaque copie,
+// chaînes et programmes dédupliqués first-wins — La forme du document est
+// préservée : le DOCTYPE de la première copie traverse la fusion (critère de
+// la spec « déclaration XML et doctype conservés », consumé par /xmltv). Le
+// balayage token par token repose sur la primitive unique xmltv.Balayer (la
+// machine commune à xmltv.Filtrer) ; le store n'y apporte que ses décisions
+// de dédup. Une copie rompue au milieu n'est pas une erreur : la partie
+// lisible est fusionnée et on passe à la copie suivante (même tolérance que
+// xmltv.Filtrer).
 func fusionnerXMLTV(copies []string, sortie io.Writer) error {
 	var (
-		encodeur    = xml.NewEncoder(sortie)
-		racine      xml.Name
-		declaration bool
-		vuesChaine  = map[string]struct{}{}
-		vusProg     = map[cleProgramme]struct{}{}
+		encodeur   = xml.NewEncoder(sortie)
+		racine     xml.Name // nom de la racine fusionnée : celle du premier arrivé
+		ouverte    bool     // la racine fusionnée a été émise (première copie)
+		declXML    bool     // déclaration XML déjà émise (une seule par document)
+		doctype    bool     // DOCTYPE déjà émis (une seule par document)
+		ouverts    int      // éléments reçus de la copie courante et émis, ouverts
+		vuesChaine = map[string]struct{}{}
+		vusProg    = map[xmltv.CleProgramme]struct{}{}
 	)
 
 	for _, copie := range copies {
@@ -112,111 +114,87 @@ func fusionnerXMLTV(copies []string, sortie io.Writer) error {
 		if err != nil {
 			return err
 		}
-		decodeur := xml.NewDecoder(f)
-
-		// Jusqu'à la racine <tv> de cette copie : émettre la déclaration
-		// XML du premier arrivé, puis solder la racine à la fin.
-		var racineCopie xml.StartElement
-		for racineCopie.Name.Local == "" {
-			token, erreur := decodeur.Token()
-			if erreur != nil {
-				break // copie rompue avant sa racine : passer à la suivante
-			}
-			switch t := token.(type) {
-			case xml.ProcInst:
-				if t.Target == "xml" && !declaration {
-					declaration = true
-					erreur = encodeur.EncodeToken(t)
+		_, erreur := xmltv.Balayer(f,
+			// Racine de la copie : celle du premier arrivé ouvre la racine
+			// fusionnée ; celle des copies suivantes (même nom) ne sont
+			// pas réémises — leurs enfants se fondent sous la racine unique.
+			// Le doctype/déclaration du prologue de chaque copie a déjà
+			// traversé surToken.
+			func(racineCopie xml.StartElement) error {
+				if ouverte {
+					return nil
 				}
-			case xml.StartElement:
-				racineCopie = t
-			}
-			if erreur != nil {
-				break
-			}
-		}
-		if racineCopie.Name.Local == "" {
-			f.Close()
-			continue
-		}
-		if racine.Local == "" {
-			racine = racineCopie.Name
-			if err := encodeur.EncodeToken(racineCopie); err != nil {
-				f.Close()
-				return err
-			}
-		}
-
-		// Enfants de cette copie : dédup des entrées, réémission token par
-		// token (le réencodage du parseur est la normalisation attendue, le
-		// contenu sémantique est préservé).
-		var (
-			profondeur int   // sous-éléments courants entre racine et fin d'entrée
-			jeter      int   // profondeur restante au-dessous d'une entrée éjectée
-			fin        error // première erreur non tolérée
-		)
-		for {
-			token, erreur := decodeur.Token()
-			if erreur != nil {
-				break
-			}
-			switch t := token.(type) {
-			case xml.EndElement:
-				if jeter > 0 {
-					jeter--
-					continue
-				}
-				if profondeur == 0 {
-					// Fin de la racine de cette copie : copie suivante.
-					goto copieSuivante
-				}
-				if profondeur > 0 {
-					if err := encodeur.EncodeToken(t); err != nil {
-						fin = err
-						goto copieSuivante
+				ouverte = true
+				racine = racineCopie.Name
+				return encodeur.EncodeToken(racineCopie)
+			},
+			// Dédup first-wins : première copie et première occurrence
+			// gagnent — la dédup vit dans cette callback, la primitive
+			// xmltv.Balayer ne décide jamais d'elle-même.
+			func(debut xml.StartElement) (bool, error) {
+				switch debut.Name.Local {
+				case "channel":
+					return retenuChaine(debut, vuesChaine), nil
+				case "programme":
+					cle := xmltv.CleProgramme{
+						Chaine: xmltv.Attribut(debut, "channel"),
+						Start:  xmltv.Attribut(debut, "start"),
 					}
-					profondeur--
-				}
-			case xml.StartElement:
-				if jeter > 0 {
-					jeter++
-					continue
-				}
-				if profondeur == 0 && !retenuXMLTV(t, vuesChaine, vusProg) {
-					jeter = 1
-					continue
-				}
-				if err := encodeur.EncodeToken(t); err != nil {
-					fin = err
-					goto copieSuivante
-				}
-				profondeur++
-			case xml.ProcInst:
-				// Déclaration imbriquée d'une copie : jamais réémise.
-				continue
-			case xml.CharData:
-				if jeter == 0 {
-					if err := encodeur.EncodeToken(t); err != nil {
-						fin = err
-						goto copieSuivante
+					if _, vu := vusProg[cle]; vu {
+						return false, nil
 					}
+					vusProg[cle] = struct{}{}
+					return true, nil
 				}
-			case xml.Comment:
-				if jeter == 0 {
-					if err := encodeur.EncodeToken(t); err != nil {
-						fin = err
-						goto copieSuivante
+				return true, nil
+			},
+			func(token xml.Token) error {
+				switch t := token.(type) {
+				case xml.ProcInst:
+					// La déclaration XML du premier arrivé seulement : les
+					// suivantes (copies, imbriquées, cibles non-xml) sont
+					// jamais réémises.
+					if t.Target == "xml" && !declXML && !ouverte {
+						declXML = true
+						return encodeur.EncodeToken(t)
 					}
+					return nil
+				case xml.Directive:
+					// Le DOCTYPE du premier arrivé seulement — c'est lui qui
+					// garde le snapshot servi par /xmltv canonique.
+					if !doctype && !ouverte {
+						doctype = true
+						return encodeur.EncodeToken(t)
+					}
+					return nil
+				case xml.CharData, xml.Comment:
+					if !ouverte {
+						// Texte et commentaires du prologue : jamais réémis.
+						return nil
+					}
+					return encodeur.EncodeToken(t)
+				case xml.StartElement:
+					ouverts++
+					return encodeur.EncodeToken(t)
+				case xml.EndElement:
+					if ouverts == 0 {
+						// Fermeture de la racine de CETTE copie (première ou
+						// suivante) : jamais réémise — la racine fusionnée ne
+						// se ferme qu'en toute fin, après la dernière copie.
+						return nil
+					}
+					ouverts--
+					return encodeur.EncodeToken(t)
 				}
-			}
-		}
-	copieSuivante:
+				return nil
+			})
 		f.Close()
-		if fin != nil {
-			return fin
+		if erreur != nil {
+			return erreur
 		}
 	}
-	if racine.Local == "" {
+	if !ouverte {
+		// Aucune copie lisible : rien publié (aucune racine à fermer).
 		return nil
 	}
 	if err := encodeur.EncodeToken(xml.EndElement{Name: racine}); err != nil {
@@ -225,39 +203,17 @@ func fusionnerXMLTV(copies []string, sortie io.Writer) error {
 	return encodeur.Flush()
 }
 
-// retenuXMLTV dit si une entrée de niveau enfant (chaîne, programme) doit
-// être émise : dédup first-wins par identité de chaîne, puis par clé
-// (chaîne, start) — première copie et première occurrence gagnent. Une
-// profondeur > 0 dans les sous-éléments ne re-décide jamais : l'entrée
-// entière passe.
-func retenuXMLTV(element xml.StartElement, vuesChaine map[string]struct{}, vusProg map[cleProgramme]struct{}) bool {
-	switch element.Name.Local {
-	case "channel":
-		id := attributXMLTV(element, "id")
-		if id == "" {
-			return true // sans identifiant, impossible de dédupliquer
-		}
-		if _, vu := vuesChaine[id]; vu {
-			return false
-		}
-		vuesChaine[id] = struct{}{}
-		return true
-	case "programme":
-		cle := cleProgramme{chaine: attributXMLTV(element, "channel"), start: attributXMLTV(element, "start")}
-		if _, vu := vusProg[cle]; vu {
-			return false
-		}
-		vusProg[cle] = struct{}{}
-		return true
+// retenuChaine dit si l'entrée chaîne vue est A RETENIR : son identifiant
+// (l'attribut id) doit être inconnu — dédup first-wins ; une chaîne sans
+// identifiant ne peut pas être dédoublonnée et passe toujours.
+func retenuChaine(debut xml.StartElement, vues map[string]struct{}) bool {
+	id := xmltv.Attribut(debut, "id")
+	if id == "" {
+		return true // sans identifiant, impossible de dédupliquer
 	}
+	if _, vu := vues[id]; vu {
+		return false
+	}
+	vues[id] = struct{}{}
 	return true
-}
-
-func attributXMLTV(element xml.StartElement, nom string) string {
-	for _, attr := range element.Attr {
-		if attr.Name.Local == nom {
-			return attr.Value
-		}
-	}
-	return ""
 }

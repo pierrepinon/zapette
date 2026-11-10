@@ -68,7 +68,10 @@ func main() {
 	resolveur := publicip.Nouveau(configCourante(loader),
 		func(timeout time.Duration) publicip.Fetcher { return publicip.Fetcher(fetch.NouveauFetcher(timeout)) })
 	serveur := server.Nouveau(boutique, configCourante(loader)).AvecPublicIP(resolveur.Etat)
-	httpServ, ecouteur, err := demarrerHTTP(adresseEcoute(cfg), serveur.Handler())
+	// L'adresse d'écoute vient UNIQUEMENT de la config (server_addr, défaut
+	// [::]:8080 appliqué à la lecture) : une ressource = un chemin. L'env
+	// n'y entre que par l'expansion ${ZAPETTE_ADDR} du fichier de config.
+	httpServ, ecouteur, err := demarrerHTTP(cfg.ServerAddr, serveur.Handler())
 	if err != nil {
 		slog.Error("écoute impossible", "adresse", cfg.ServerAddr, "erreur", err)
 		os.Exit(1)
@@ -78,7 +81,7 @@ func main() {
 	// Le signaleur du fetch nourrit le ring d'erreurs de /api/status :
 	// dépendance inversée par la callback, fetch ne connaît jamais server
 	// (story 15 — recent-error ring).
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais).
 		AvecSignaleur(serveur.SignalerErreur)
 	go ordonnanceur.Run(ctx, loader)
 	go resolveur.Run(ctx)
@@ -102,19 +105,6 @@ func configCourante(loader *config.Loader) func() config.Config {
 		cfg, _ := loader.Relire()
 		return cfg
 	}
-}
-
-// adresseEcoute résout l'adresse d'écoute : ZAPETTE_ADDR priorise
-// l'environnement, sinon server_addr de la config (défaut [::]:8080
-// appliqué par la config à la lecture).
-func adresseEcoute(cfg config.Config) string {
-	if adresse := os.Getenv("ZAPETTE_ADDR"); adresse != "" {
-		return adresse
-	}
-	if cfg.ServerAddr != "" {
-		return cfg.ServerAddr
-	}
-	return "[::]:8080"
 }
 
 // demarrerHTTP écoute l'adresse indiquée puis sert le handler en

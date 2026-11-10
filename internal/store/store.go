@@ -34,6 +34,18 @@ func (s *Store) CheminCopie(nom, artefact string) string {
 	return filepath.Join(s.racine, "sources", nom+"."+artefact)
 }
 
+// CheminsCopies retourne le chemin de copie de chaque source nommée pour
+// l'artefact donné, dans l'ordre fourni (l'ordre de fusion de
+// Reconstruire) : la clé de copie est le domaine du store, le cadran des
+// sources au store de fetch.
+func (s *Store) CheminsCopies(sources []string, artefact string) []string {
+	chemins := make([]string, 0, len(sources))
+	for _, nom := range sources {
+		chemins = append(chemins, s.CheminCopie(nom, artefact))
+	}
+	return chemins
+}
+
 // CheminSnapshot retourne le chemin du snapshot fusionné d'un artefact.
 func (s *Store) CheminSnapshot(artefact string) string {
 	return filepath.Join(s.racine, "snapshot."+artefact)

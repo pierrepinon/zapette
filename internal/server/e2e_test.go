@@ -88,7 +88,7 @@ func passerUneFois(t *testing.T, cfg config.Config) {
 	if err != nil {
 		t.Fatalf("ouverture du store : %v", err)
 	}
-	o := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
+	o := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais)
 	if err := o.Passe(context.Background(), cfg); err != nil {
 		t.Fatalf("passe de fetch : %v", err)
 	}
@@ -434,7 +434,7 @@ func TestRepliSurSnapshotEchecFetch(t *testing.T) {
 	// Câblage de production : la callback du fetch alimente le ring du
 	// serveur (dépendance inversée, fetch ne connaît jamais server).
 	s := Nouveau(boutique, func() config.Config { return cfg })
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais).
 		AvecSignaleur(s.SignalerErreur)
 
 	if err := ordonnanceur.Passe(context.Background(), cfg); err != nil {

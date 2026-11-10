@@ -79,6 +79,9 @@ func (o *Ordonnanceur) boucler(ctx context.Context, loader *config.Loader, ticks
 
 // drainer vide non bloquamment un canal de ticks : les ticks tombés
 // pendant une passe sont jetés, le prochain fetch attend un tick neuf.
+// Dupliqué assumé (revue #12) avec le drainer de publicip/resolver.go :
+// même sémantique de drain de ticker, deux paquets sans dépendance
+// partagée — les deux commentaires se renvoient l'un à l'autre.
 func drainer(ticks <-chan time.Time) {
 	for {
 		select {
