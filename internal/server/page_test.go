@@ -41,10 +41,20 @@ func TestTableauBordEmbarqué(t *testing.T) {
 		t.Errorf("/ : Content-Type %q, voulu du text/html", type_)
 	}
 	page := string(corps)
-	for _, attendu := range []string{`lang="fr"`, "zapette"} {
+	for _, attendu := range []string{`lang="fr"`, "zapette", `rel="icon"`} {
 		if !strings.Contains(page, attendu) {
-			t.Errorf("/ : %q absent de la page embarquée (lang fr, titre)", attendu)
+			t.Errorf("/ : %q absent de la page embarquée (lang fr, titre, favicon)", attendu)
 		}
+	}
+
+	// La favicon embarquée se sert sur le binaire seul (offline OK,
+	// story 18) avec son type SVG.
+	codeFavicon, entêtesFavicon, _ := obtenir(t, recette.URL+"/favicon.svg")
+	if codeFavicon != http.StatusOK {
+		t.Errorf("/favicon.svg : code %d, voulu 200 (embarquée via l'embed)", codeFavicon)
+	}
+	if typeFavicon := entêtesFavicon.Get("Content-Type"); !strings.Contains(typeFavicon, "image/svg+xml") {
+		t.Errorf("/favicon.svg : Content-Type %q, voulu image/svg+xml", typeFavicon)
 	}
 
 	// Les assets hachés du build Vite sont résolus par le même embed :
