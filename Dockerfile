@@ -24,8 +24,12 @@ RUN go mod download
 COPY . .
 ARG TARGETOS
 ARG TARGETARCH
+ARG VERSION=dev
+# VERSION : version à stamper dans le binaire (passé par image.yml au tag
+# vX.Y.Z) ; le stamp atteint /api/status et le footer via -ldflags -X.
 RUN CGO_ENABLED=0 GOOS=$TARGETOS GOARCH=$TARGETARCH \
-    go build -trimpath -ldflags="-s -w" -o /out/zapette . \
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" \
+    -o /out/zapette . \
     && mkdir -p /out/data && chown 65532:65532 /out/data
 
 FROM scratch
