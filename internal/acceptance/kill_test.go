@@ -205,7 +205,7 @@ func attendreHTTPFonctionnel(t *testing.T, port int) *http.Client {
 // opérationnel depuis le disque », joué sur le VRAI binaire :
 //
 //  1. Phase A : une passe de fetch complète réussit (playlist synthétique
-//     serviepar un fournisseur local) → dernière bonne copie sur disque.
+//     servie par un fournisseur local) → dernière bonne copie sur disque.
 //  2. Phase B : le binaire démarre contre un fournisseur LENT et prend un
 //     SIGKILL en plein fetch → snapshot au disque octet pour octet identique,
 //     temporaires orphelins présents mais sans conséquence.
