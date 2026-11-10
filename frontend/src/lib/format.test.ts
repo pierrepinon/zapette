@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDurée, formatHorodatage, formatOctets } from './format';
+import { formatDurée, formatDuréeGo, formatHorodatage, formatOctets } from './format';
 
 describe('formatOctets', () => {
   it('retourne « — » pour null, zéro ou invalide (VmRSS illisible)', () => {
@@ -53,6 +53,37 @@ describe('formatDurée', () => {
     expect(formatDurée(86_400)).toBe('1 j');
     expect(formatDurée(93_600)).toBe('1 j 2 h');
     expect(formatDurée(86_400 * 3)).toBe('3 j');
+  });
+});
+
+describe('formatDuréeGo', () => {
+  it('retourne « — » pour vide ou absent', () => {
+    expect(formatDuréeGo(null)).toBe('—');
+    expect(formatDuréeGo(undefined)).toBe('—');
+    expect(formatDuréeGo('')).toBe('—');
+  });
+
+  it('ébrouille les composantes nulles (« 6h0m0s » → « 6 h »)', () => {
+    expect(formatDuréeGo('6h0m0s')).toBe('6 h');
+    expect(formatDuréeGo('1h0m30s')).toBe('1 h 30 s');
+    expect(formatDuréeGo('90m0s')).toBe('1 h 30 min');
+  });
+
+  it('forme le circuit complet j/h/min/s', () => {
+    expect(formatDuréeGo('27h0m0s')).toBe('1 j 3 h');
+    expect(formatDuréeGo('1h30m45.5s')).toBe('1 h 30 min 45 s');
+    expect(formatDuréeGo('90s')).toBe('1 min 30 s');
+  });
+
+  it('formate les sous-secondes et zéro', () => {
+    expect(formatDuréeGo('0.5s')).toBe('0,50 s');
+    expect(formatDuréeGo('0s')).toBe('0 s');
+    expect(formatDuréeGo('500ms')).toBe('0,50 s');
+  });
+
+  it('renvoie la valeur brute sur un format non Go', () => {
+    expect(formatDuréeGo('bientôt')).toBe('bientôt');
+    expect(formatDuréeGo('6 h')).toBe('6 h');
   });
 });
 

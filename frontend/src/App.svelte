@@ -6,7 +6,7 @@
   // bannière d'erreur, étiquettes visibles, focus visible (app.css).
   import { onMount } from 'svelte';
   import { créerStatut, type ÉtatArtefact, type VueSource } from './lib/statut.svelte';
-  import { formatDurée, formatHorodatage, formatOctets } from './lib/format';
+  import { formatDurée, formatDuréeGo, formatHorodatage, formatOctets } from './lib/format';
   import Carte from './lib/composantes/Carte.svelte';
   import BasculeTheme from './lib/composantes/BasculeTheme.svelte';
 
@@ -55,7 +55,20 @@
         {/if}
       </p>
     </div>
-    <BasculeTheme />
+    <div class="flex flex-wrap items-start justify-end gap-x-6 gap-y-3">
+      <div class="text-left sm:text-right">
+        <p class="text-xs font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">
+          IP publique
+        </p>
+        <p class="mt-0.5 font-mono text-lg font-semibold text-slate-900 dark:text-slate-50">
+          {statut.ipv4 ?? '—'}
+        </p>
+        <p class="font-mono text-sm text-slate-600 dark:text-slate-400">
+          {statut.ipv6 ?? '—'}
+        </p>
+      </div>
+      <BasculeTheme />
+    </div>
   </header>
 
   {#if statut.état === 'erreur'}
@@ -103,37 +116,33 @@
       <Carte titre="Configuration">
         {#if statut.résuméConfig}
           <dl class="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
-            <div>
-              <dt class="text-slate-500 dark:text-slate-400">Intervalle</dt>
-              <dd class="mt-0.5 font-semibold">{statut.résuméConfig.intervalle}</dd>
+            <div class="min-w-0">
+              <dt class="text-slate-500 dark:text-slate-400">Intervalle de rafraîchissement</dt>
+              <dd class="mt-0.5 text-lg font-semibold" title="Le YAML est relu à chaque tick ; {statut.résuméConfig.intervalle}">
+                {formatDuréeGo(statut.résuméConfig.intervalle)}
+              </dd>
             </div>
-            <div>
+            <div class="min-w-0">
               <dt class="text-slate-500 dark:text-slate-400">Sources</dt>
-              <dd class="mt-0.5 font-semibold tabular-nums">{statut.résuméConfig.nbSources}</dd>
+              <dd class="mt-0.5 text-lg font-semibold tabular-nums">
+                {statut.résuméConfig.nbSources}
+              </dd>
             </div>
-            <div>
+            <div class="min-w-0">
               <dt class="text-slate-500 dark:text-slate-400">Groupes autorisés</dt>
-              <dd class="mt-0.5 font-semibold tabular-nums">{statut.résuméConfig.nbGroupes}</dd>
+              <dd class="mt-0.5 text-lg font-semibold tabular-nums">
+                {statut.résuméConfig.nbGroupes === 0 ? 'Tout' : statut.résuméConfig.nbGroupes}
+              </dd>
             </div>
           </dl>
+          <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            {statut.résuméConfig.nbGroupes === 0
+              ? 'Liste vide : tout le M3U est conservé.'
+              : 'Filtrage exact, sensible à la casse.'}
+          </p>
+        {:else}
+          <p class="text-sm text-slate-500 dark:text-slate-400">Configuration inconnue.</p>
         {/if}
-      </Carte>
-
-      <Carte titre="IP publiques">
-        <dl class="grid grid-cols-2 gap-x-4 gap-y-3 text-sm">
-          <div class="min-w-0">
-            <dt class="text-slate-500 dark:text-slate-400">IPv4</dt>
-            <dd class="mt-0.5 truncate font-mono">{statut.ipv4 ?? '—'}</dd>
-          </div>
-          <div class="min-w-0">
-            <dt class="text-slate-500 dark:text-slate-400">IPv6</dt>
-            <dd class="mt-0.5 truncate font-mono">{statut.ipv6 ?? '—'}</dd>
-          </div>
-          <div class="col-span-2">
-            <dt class="text-slate-500 dark:text-slate-400">Dernière vérification</dt>
-            <dd class="mt-0.5">{formatHorodatage(statut.dernièreVérificationIP)}</dd>
-          </div>
-        </dl>
       </Carte>
 
       <Carte titre="Sources" pleineLargeur>
@@ -232,4 +241,14 @@
       Chargement du statut…
     </p>
   {/if}
+
+  <footer
+    class="mt-8 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 border-t border-slate-200 pt-4 text-xs text-slate-500 dark:border-slate-800 dark:text-slate-400"
+  >
+    <p>
+      Dernière vérification de l'IP publique :
+      <span class="font-medium tabular-nums">{formatHorodatage(statut.dernièreVérificationIP)}</span>
+    </p>
+    <p>Zapette filtre et ressert le M3U/XMLTV ; il ne proxifie jamais les flux.</p>
+  </footer>
 </div>
