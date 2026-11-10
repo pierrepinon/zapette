@@ -176,8 +176,11 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 
 // nomCopie retourne le nom de la source d'une copie : le nom de fichier
 // sans l'extension d'artefact (sources/<nom>.m3u|.xmltv, nom posé par
-// CheminCopie). Le nom de source ne doit donc pas se terminer par
-// « .m3u » ou « .xmltv » : convention de nommage du data_dir.
+// CheminCopie). L'extension d'artefact est toujours la DERNIÈRE du nom de
+// fichier — filepath.Ext("prov.m3u.m3u") = ".m3u" — donc le nom retourne
+// tel quel, fût-il terminé par « .m3u » ou « .xmltv » ; les séparateurs de
+// chemin (/, \) n'y figurent jamais : la config les refuse en amont
+// (config.valider, le name ne peut pas sortir de sources/).
 func nomCopie(copie string) string {
 	return strings.TrimSuffix(filepath.Base(copie), filepath.Ext(copie))
 }
