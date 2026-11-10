@@ -2,8 +2,12 @@
 /zapette
 /zapette-*
 
-# Données runtime : copies de source, snapshots (défaut du binaire)
+# Données runtime : copies de source, snapshots et meta.json. /data est le
+# défaut du binaire ; /.data est le data_dir des essais réels de
+# l'opérateur depuis le dépôt (config.yaml local) — jamais commités :
+# les copies de source contiennent les URL de flux du fournisseur.
 /data/
+/.data/
 
 # Frontend (dashboard embarqué) : dépendances npm seulement. Le build de
 # production frontend/dist/ est COMMITTÉ : c'est lui que embed.FS embarque

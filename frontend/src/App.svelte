@@ -117,7 +117,7 @@
         {#if statut.résuméConfig}
           <dl class="grid grid-cols-3 gap-x-4 gap-y-3 text-sm">
             <div class="min-w-0">
-              <dt class="text-slate-500 dark:text-slate-400">Intervalle de rafraîchissement</dt>
+              <dt class="text-slate-500 dark:text-slate-400" title="Rafraîchissement des sources">Intervalle</dt>
               <dd class="mt-0.5 text-lg font-semibold" title="Le YAML est relu à chaque tick ; {statut.résuméConfig.intervalle}">
                 {formatDuréeGo(statut.résuméConfig.intervalle)}
               </dd>
@@ -129,7 +129,7 @@
               </dd>
             </div>
             <div class="min-w-0">
-              <dt class="text-slate-500 dark:text-slate-400">Groupes autorisés</dt>
+              <dt class="text-slate-500 dark:text-slate-400" title="Liste de groupes autorisés">Groupes</dt>
               <dd class="mt-0.5 text-lg font-semibold tabular-nums">
                 {statut.résuméConfig.nbGroupes === 0 ? 'Tout' : statut.résuméConfig.nbGroupes}
               </dd>
