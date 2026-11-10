@@ -159,19 +159,32 @@ func (s *Serveur) servirM3U(w http.ResponseWriter, r *http.Request) {
 	servirPrevisu(w, s.boutique.CheminSnapshot("m3u"), groupe)
 }
 
+// ouvrirSnapshot ouvre un fichier snapshot du disque et répond à la place du
+// handler en cas d'échec : 503 JSON explicite sans fichier (démarrage à
+// froid, avant la première passe réussie — story 10), 500 après
+// journalisation pour toute autre erreur d'ouverture. ok=false : le handler
+// a déjà répondu, ne rien écrire de plus.
+func ouvrirSnapshot(w http.ResponseWriter, chemin string) (*os.File, bool) {
+	snapshot, err := os.Open(chemin)
+	if err != nil {
+		if os.IsNotExist(err) {
+			reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
+			return nil, false
+		}
+		slog.Error("ouverture du snapshot impossible", "fichier", chemin, "erreur", err)
+		http.Error(w, "erreur interne", http.StatusInternalServerError)
+		return nil, false
+	}
+	return snapshot, true
+}
+
 // servirPrevisu sert le M3U snapshot filtré à la volée sur un groupe :
 // le fichier est ouvert ici et la sortie du filtre est streamée vers la
 // réponse — le snapshot n'est pas réécrit, la mémoire reste constante
 // (ADR-0001).
 func servirPrevisu(w http.ResponseWriter, chemin, groupe string) {
-	snapshot, err := os.Open(chemin)
-	if err != nil {
-		if os.IsNotExist(err) {
-			reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
-			return
-		}
-		slog.Error("ouverture du snapshot impossible", "fichier", chemin, "erreur", err)
-		http.Error(w, "erreur interne", http.StatusInternalServerError)
+	snapshot, ok := ouvrirSnapshot(w, chemin)
+	if !ok {
 		return
 	}
 	defer snapshot.Close()
@@ -195,14 +208,8 @@ func (s *Serveur) servirXMLTV(w http.ResponseWriter, _ *http.Request) {
 // lecteur reçoit toujours le snapshot frais. Sans fichier (démarrage à
 // froid, avant la première passe réussie) : 503 JSON explicite (story 10).
 func servirArtefact(w http.ResponseWriter, chemin, typeContenu string) {
-	snapshot, err := os.Open(chemin)
-	if err != nil {
-		if os.IsNotExist(err) {
-			reponse503(w, "aucun snapshot n'existe encore : la première passe de fetch n'a pas abouti")
-			return
-		}
-		slog.Error("ouverture du snapshot impossible", "fichier", chemin, "erreur", err)
-		http.Error(w, "erreur interne", http.StatusInternalServerError)
+	snapshot, ok := ouvrirSnapshot(w, chemin)
+	if !ok {
 		return
 	}
 	defer snapshot.Close()
