@@ -73,7 +73,9 @@ Chemin du fichier : `ZAPETTE_CONFIG` (défaut `./config.yaml`). Le fichier est
 relu à chaque tick ; en cas d'erreur de lecture, la dernière bonne config est
 conservée. Les secrets passent par l'expansion `${VAR}` — une référence quotée
 garde une valeur texte, une référence non quotée reçoit le type de la valeur
-développée. Exemple complet : [`config.example.yaml`](config.example.yaml).
+développée. **Une `${VAR}` indéfinie est une erreur de chargement, jamais un
+retour au défaut** : les défauts du tableau ci-dessous ne s'appliquent que
+quand la clé elle-même est absente du fichier. Exemple complet : [`config.example.yaml`](config.example.yaml).
 
 | Clé | Type / défaut | Rôle |
 | --- | --- | --- |
@@ -88,8 +90,11 @@ développée. Exemple complet : [`config.example.yaml`](config.example.yaml).
 | `data_dir` | chemin, `./data` | Répertoire des copies de source et du snapshot |
 | `public_ipv4_url` / `public_ipv6_url` | URL, ipify | Endpoints de détection de l'IP publique affichée dans le dashboard |
 
-Variables d'environnement : `ZAPETTE_CONFIG` (chemin du fichier), `ZAPETTE_ADDR`
-(écrase `server_addr`), `ZAPETTE_DATA_DIR` (écrase `data_dir`). Dans l'image,
+Variables d'environnement : `ZAPETTE_CONFIG` (chemin du fichier).
+`ZAPETTE_ADDR` et `ZAPETTE_DATA_DIR` ne sont JAMAIS relues directement : la
+config est le seul chemin (une ressource = un chemin) — elles n'y entrent que
+si votre fichier les développe explicitement (ex. `server_addr: ${ZAPETTE_ADDR}`
+; alors elles doivent être définies, sinon erreur de chargement). Dans l'image,
 `ZAPETTE_DATA_DIR` vaut `/data` (répertoire possédé par l'utilisateur `65532`).
 
 ## Points d'accès HTTP
