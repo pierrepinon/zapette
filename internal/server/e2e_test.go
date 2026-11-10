@@ -509,3 +509,54 @@ func lireFichier(t *testing.T, chemin string) string {
 }
 
 // TestFroidSansSnapshot : au démarrage, avant la première passe réussie,
+
+// TestStatutExposeVersion : /api/status expose le stamp de version — « dev »
+// par défaut, valeur réelle quand le câblage main passe la var version
+// (injectée via -ldflags -X) au serveur. Le contrat du dashboard ne change
+// pas : un champ de plus, présent même à froid.
+func TestStatutExposeVersion(t *testing.T) {
+	recette := E2E(t, configE2E(t))
+
+	code, _, corps := obtenir(t, recette.URL+"/api/status")
+	if code != http.StatusOK {
+		t.Fatalf("/api/status : code %d, voulu 200", code)
+	}
+
+	var statut struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(corps, &statut); err != nil {
+		t.Fatalf("/api/status non JSON : %v\n%s", err, corps)
+	}
+	if statut.Version != "dev" {
+		t.Errorf("/api/status version = %q, voulu %q (défaut du var main, sans -ldflags)", statut.Version, "dev")
+	}
+}
+
+// TestAvecVersion : AvecVersion Chaîne la version injectée au serveur — le
+// field /api/status ressort la valeur passée par le câblage, pas un défaut.
+func TestAvecVersion(t *testing.T) {
+	boutique, err := store.Ouvrir(t.TempDir())
+	if err != nil {
+		t.Fatalf("ouverture du store : %v", err)
+	}
+	const spécimen = "v0.1.0-test"
+	s := Nouveau(boutique, configVide).AvecVersion(spécimen)
+
+	recette := httptest.NewServer(s.Handler())
+	t.Cleanup(recette.Close)
+
+	code, _, corps := obtenir(t, recette.URL+"/api/status")
+	if code != http.StatusOK {
+		t.Fatalf("/api/status : code %d, voulu 200", code)
+	}
+	var statut struct {
+		Version string `json:"version"`
+	}
+	if err := json.Unmarshal(corps, &statut); err != nil {
+		t.Fatalf("/api/status non JSON : %v\n%s", err, corps)
+	}
+	if statut.Version != spécimen {
+		t.Errorf("/api/status version = %q, voulu %q (version Chaînée, pas le défaut)", statut.Version, spécimen)
+	}
+}

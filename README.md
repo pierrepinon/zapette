@@ -1,10 +1,14 @@
 # Zapette
 
+[![CI](https://github.com/pierrepinon/zapette/actions/workflows/ci.yml/badge.svg)](https://github.com/pierrepinon/zapette/actions/workflows/ci.yml)
+[![Release](https://github.com/pierrepinon/zapette/actions/workflows/release.yml/badge.svg)](https://github.com/pierrepinon/zapette/actions/workflows/release.yml)
+[![Licence MIT](https://img.shields.io/badge/licence-MIT-green.svg)](LICENSE)
+
 Zapette est un filtre IPTV : il récupère périodiquement la playlist M3U et le
 guide XMLTV d'un fournisseur, n'en conserve que les groupes autorisés, et
-ressert le résultat tel quel à un lecteur (Jellyfin, ou tout lecteur M3U).
+resse le résultat tel quel à un lecteur (Jellyfin, ou tout lecteur M3U).
 Aucune transformation du contenu, seulement du filtrage — les URL de flux sont
-retransmises octet par octet, jamais réécrites ni proxifiées.
+retransmises octet pour octet, jamais réécrites ni proxifiées.
 
 - **Un unique binaire Go statique** (`CGO_ENABLED=0`), dashboard web embarqué
   (Svelte 5 + Tailwind CSS v4, servi via `embed.FS`, aucune ressource externe).
@@ -15,24 +19,66 @@ retransmises octet par octet, jamais réécrites ni proxifiées.
   disque et reste servie quand un fetch échoue ; le vocabulaire du domaine est
   défini dans [GLOSSARY.md](GLOSSARY.md).
 
-## Fonctionnement
+## Installation
 
-1. Au démarrage puis à chaque `refresh_interval`, chaque `source` déclarée est
-   téléchargée (séquentiellement, timeout et 3 reprises par source, backoff
-   fixe de 5 s) et filtrée en streaming selon la liste de groupes autorisés.
-2. Chaque source filtrée est stockée sur disque (*copie de source*) ; un fetch
-   en échec fige uniquement la copie de la source concernée.
-3. Les copies sont fusionnées et dédoublonnées (identité = `tvg-id`, sinon URL
-   de flux ; première occurrence conservée) en un *snapshot* sur disque, publié
-   par renommage atomique, et servi tel quel.
+### Lancer l'image
 
-Pendant qu'aucun snapshot n'existe encore (démarrage à froid avec un
-fournisseur indisponible), `/m3u` et `/xmltv` répondent explicitement **503**.
+L'image multi-arch (amd64 + arm64) est publiée sur
+`ghcr.io/pierrepinon/zapette` par GitHub Actions
+([`.github/workflows/image.yml`](.github/workflows/image.yml)). Construite
+`FROM scratch` : uniquement le binaire statique et les certificats CA, sans
+shell ni gestionnaire de paquets, en utilisateur non-root `65532`.
 
-## Lancer le binaire
+Épinglez le **digest** publié en sortie du workflow
+(`jobs.image.outputs.digest`) — la balise `latest` n'est pas immuable, le
+digest l'est :
 
 ```sh
-# Go et Node épinglés via mise (voir mise.toml)
+docker run -d --name zapette \
+  -p 127.0.0.1:8080:8080 \
+  -v ./config.yaml:/config/config.yaml:ro \
+  -v zapette-data:/data \
+  -e ZAPETTE_CONFIG=/config/config.yaml \
+  ghcr.io/pierrepinon/zapette@sha256:<digest publié par le workflow Image>
+```
+
+L'image publiée est signée cosign en mode keyless (identité du workflow
+GitHub Actions) et accompagnée d'attestations provenance (mode max) + SBOM.
+Vérification :
+
+```sh
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/pierrepinon/zapette/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/pierrepinon/zapette@sha256:<digest>
+```
+
+### Télécharger un binaire de release
+
+Chaque tag `vX.Y.Z` publie sur la
+[GitHub Release](https://github.com/pierrepinon/zapette/releases) des tarballs
+`zapette-<version>-linux-<arch>.tar.gz` (binaire + README + LICENSE) pour
+amd64 et arm64, plus un fichier `SHA256SUMS` et les signatures cosign
+`sign-blob` détachées (`*.sig`, certificats `*.pem`) de chaque artefact et du
+`SHA256SUMS` lui-même :
+
+```sh
+# intégrité : checksums
+sha256sum -c --ignore-missing SHA256SUMS
+
+# signatures cosign keyless de SHA256SUMS et de chaque tarball
+cosign verify-blob SHA256SUMS \
+  --signature SHA256SUMS.sig \
+  --certificate SHA256SUMS.pem \
+  --certificate-identity-regexp '^https://github.com/pierrepinon/zapette/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+### Construire depuis les sources
+
+Go et Node épinglés via mise (voir `mise.toml`) :
+
+```sh
 mise install
 mise exec -- go build -o zapette .
 
@@ -43,30 +89,6 @@ ZAPETTE_CONFIG=./config.yaml ./zapette
 Le binaire écoute sur `[::]:8080` par défaut et démarre même si aucun fetch
 n'a encore réussi : le dashboard reste accessible dans tous les cas.
 
-## Lancer l'image
-
-L'image multi-arch (amd64 + arm64) est publiée sur `ghcr.io/pierrepinon/zapette`
-par GitHub Actions ([`.github/workflows/image.yml`](.github/workflows/image.yml)).
-L'image est construite `FROM scratch` : elle ne contient que le binaire statique
-et les certificats CA, et tourne en utilisateur non-root `65532`. Elle ne
-contient ni shell ni gestionnaire de paquets.
-
-Épinglez le **digest** publié en sortie du workflow (`jobs.image.outputs.digest`)
-— la balise `latest` n'est pas immuable, le digest l'est :
-
-```sh
-docker run -d --name zapette \
-  -p 127.0.0.1:8080:8080 \
-  -v ./config.yaml:/config/config.yaml:ro \
-  -v zapette-data:/data \
-  -e ZAPETTE_CONFIG=/config/config.yaml \
-  -e IPTV_A_M3U_URL="https://…/playlist.m3u" \
-  ghcr.io/pierrepinon/zapette@sha256:<digest publié par le workflow Image>
-```
-
-Voir [`docker-compose.yml`](docker-compose.yml) pour un exemple complet
-derrière un reverse proxy.
-
 ## Configuration
 
 Chemin du fichier : `ZAPETTE_CONFIG` (défaut `./config.yaml`). Le fichier est
@@ -75,7 +97,8 @@ conservée. Les secrets passent par l'expansion `${VAR}` — une référence quo
 garde une valeur texte, une référence non quotée reçoit le type de la valeur
 développée. **Une `${VAR}` indéfinie est une erreur de chargement, jamais un
 retour au défaut** : les défauts du tableau ci-dessous ne s'appliquent que
-quand la clé elle-même est absente du fichier. Exemple complet : [`config.example.yaml`](config.example.yaml).
+quand la clé elle-même est absente du fichier. Exemple complet :
+[`config.example.yaml`](config.example.yaml).
 
 | Clé | Type / défaut | Rôle |
 | --- | --- | --- |
@@ -186,7 +209,7 @@ docker run --rm -it --entrypoint /busybox/sh \
 - **Renovate** (`renovate.json`) : mise, npm, github-actions et dockerfile ;
   les actions GitHub sont épinglées par SHA, les images par digest.
 
-## Écarts assumés (hors plan initial, validés à la revue)
+## Écarts assumés
 
 Le dépôt contient trois choses qui débordent le plan du ticket fondateur et
 qui restent là délibérément :
@@ -203,9 +226,3 @@ qui restent là délibérément :
   binaire sert toujours un dashboard complet, y compris construit hors CI.
   La CI vérifie le zéro-dérive (`npm run build` doit reproduire exactement
   le dist committé).
-
-## Licences et limites
-
-Pas d'authentification intégrée, pas de transcodage, pas de proxy de flux :
-Zapette ne fait que filtrer et re-servir. Voir
-[le ticket fondateur](https://github.com/pierrepinon/zapette/issues/1).

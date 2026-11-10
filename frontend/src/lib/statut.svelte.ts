@@ -27,6 +27,7 @@ export interface ÉtatSource {
 
 export interface RéponseStatut {
   generated_at: string;
+  version: string;
   sources: Record<string, ÉtatSource>;
   snapshot: {
     age_seconds: number | null;

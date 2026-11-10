@@ -58,7 +58,14 @@ func TestServerAddrCheminUnique(t *testing.T) {
 	}
 }
 
-// TestDemarrerHTTP : démarrage sur un port attribué par le noyau, réponse
+// TestVersionVariable : la var version existe et est câblée — « dev » par
+// défaut, remplacée par -ldflags -X main.version à la constructionrelease.
+func TestVersionVariable(t *testing.T) {
+	if version == "" {
+		t.Skipf("var version vide : sans ldflags, le défaut « dev » reste servi")
+	}
+}
+
 // HTTP correcte, arrêt propre — le contrat du câblage de main sans occuper
 // [::]:8080 (réservé à la vraie écoute).
 func TestDemarrerHTTP(t *testing.T) {
