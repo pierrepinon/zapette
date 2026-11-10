@@ -113,6 +113,7 @@ func (s *Serveur) Handler() http.Handler {
 	mux.HandleFunc("GET /m3u", s.servirM3U)
 	mux.HandleFunc("GET /xmltv", s.servirXMLTV)
 	mux.HandleFunc("GET /api/status", s.statut)
+	mux.HandleFunc("GET /api/canaux", s.servirCanaux)
 	// Fourre-tout sous « / » : la racine (index.html) ET les assets hachés
 	// (GET /assets/*.js|css). Plus spécifique partout ailleurs : /m3u,
 	// /xmltv, /api/status et /m3u?group= gardent la main, un autre script
