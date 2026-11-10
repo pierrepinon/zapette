@@ -32,6 +32,12 @@ import (
 
 // TestAcceptationRSS216k : LA case d'acceptation volumétrique de la spec.
 //
+// ÉCART ASSUMÉ (épinglé à la revue, côté doc : README + scripts/acceptance.sh)
+// : la mesure 216 000 entrées SYNTHÉTIQUES DE FORME RÉELLE, pas une
+// playlist fournisseur réelle — aucune donnée fournisseur dans le dépôt
+// (règle secrets) ; le budget RSS tient par la forme (entrées #EXTINF/URL
+// plausibles, mêmes chemins de code), pas par l'origine du contenu.
+//
 //  1. Playlists SYNTHÉTIQUES de 216 000 entrées générées à la volée sur
 //     disque, servies par un faux fournisseur HTTP local (aucune donnée
 //     réelle du fournisseur, aucun secret).

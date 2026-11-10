@@ -7,6 +7,9 @@
 # Couvre les critères :
 #   - RSS VmRSS < 100 Mio sur une playlist synthétique de 216 000 entrées,
 #     mesurée pendant le fetch ET sous requêtes simultanées /m3u + /xmltv ;
+#     EN FORME RÉELLE mais SYNTHÉTIQUE : aucune donnée fournisseur dans le
+#     dépôt (règle secrets) — le budget tient par la forme des entrées, pas
+#     par l'origine du contenu (écart assumé documenté dans le README) ;
 #   - diff binaire : lignes #EXTINF/URL retenues servies octet pour octet ;
 #   - kill -9 en plein fetch → redémarrage → service opérationnel sur le
 #     disque.

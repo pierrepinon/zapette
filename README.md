@@ -85,8 +85,8 @@ quand la clé elle-même est absente du fichier. Exemple complet : [`config.exam
 | `sources[].m3u_url` | URL | Playlist M3U du fournisseur |
 | `sources[].xmltv_url` | URL, optionnel | Guide XMLTV du fournisseur |
 | `fetch_timeout` | durée Go, `60s` | Timeout d'un fetch de source |
-| `fetch_retries` | entier, `3` | Reprises après échec, backoff fixe de 5 s |
-| `server_addr` | chaîne, `[::]:8080` | Adresse d'écoute HTTP |
+| `fetch_retries` | entier, `3` | Reprises après échec, pause fixe de 5 s ; `0` est impossible — la valeur 0 est indistinguable d'une clé absente et est coercée au défaut |
+| `server_addr` | chaîne, `[::]:8080` | Adresse d'écoute HTTP — le SEUL chemin de l'adresse : aucune variable d'environnement n'est relue directement |
 | `data_dir` | chemin, `./data` | Répertoire des copies de source et du snapshot |
 | `public_ipv4_url` / `public_ipv6_url` | URL, ipify | Endpoints de détection de l'IP publique affichée dans le dashboard |
 
@@ -171,10 +171,38 @@ docker run --rm -it --entrypoint /busybox/sh \
   `frontend/dist/` (le dist committé doit être exactement le produit du build),
   `go test ./... -count=1`, `go vet`, `gofmt`, puis build `CGO_ENABLED=0` dont
   on vérifie qu'il embarque bien le frontend.
+- **Job `go-race`** : `go test -race` ne « teste » pas plus vite — c'est une
+  **certification data-race** du runtime (harnais et serveur concurrents)
+  clang épinglé via mise.
+- **Harnais d'acceptation** ([`scripts/acceptance.sh`](scripts/acceptance.sh),
+  hors CI courte) : le budget RSS de la spec (100 Mio pour 216 000 entrées)
+  est mesuré par `internal/acceptance` sur une playlist **SYNTHÉTIQUE en
+  forme réelle** (générée à la volée, entrées `#EXTINF`/URL plausibles) —
+  **aucune donnée fournisseur dans le dépôt** (règle secrets) : les mesures
+  tiennent par la forme, pas par un contenu réel ; reproductible à la demande
+  via le script.
 - **Image** ([`.github/workflows/image.yml`](.github/workflows/image.yml)) :
   buildx multi-arch amd64 + arm64 → `ghcr.io`, digest publié en sortie de job.
 - **Renovate** (`renovate.json`) : mise, npm, github-actions et dockerfile ;
   les actions GitHub sont épinglées par SHA, les images par digest.
+
+## Écarts assumés (hors plan initial, validés à la revue)
+
+Le dépôt contient trois choses qui débordent le plan du ticket fondateur et
+qui restent là délibérément :
+
+- **[`docker-compose.yml`](docker-compose.yml) est un exemple de déploiement**
+  (reverse proxy, volume de données, service `debug`) — pas un artefact de
+  production : l'image reste le chemin d'entrée.
+
+- **Le job `go-race` de la CI est une certification data-race**, pas un test
+  de rapidité ni de redondance : il fait tourner le même runtime concurrent
+  (harnais + serveur + résolveur) sous le détecteur de course.
+
+- **`frontend/dist/` est committé** : c'est ce que `embed.FS` embarque — le
+  binaire sert toujours un dashboard complet, y compris construit hors CI.
+  La CI vérifie le zéro-dérive (`npm run build` doit reproduire exactement
+  le dist committé).
 
 ## Licences et limites
 
