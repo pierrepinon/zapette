@@ -78,7 +78,7 @@ func main() {
 	// Le signaleur du fetch nourrit le ring d'erreurs de /api/status :
 	// dépendance inversée par la callback, fetch ne connaît jamais server
 	// (story 15 — recent-error ring).
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais).
 		AvecSignaleur(serveur.SignalerErreur)
 	go ordonnanceur.Run(ctx, loader)
 	go resolveur.Run(ctx)

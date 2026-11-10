@@ -76,7 +76,7 @@ func TestAcceptationRSS216k(t *testing.T) {
 
 	// ——— Mesure 1 : la passe de FETCH. ———
 	mesurerFetch := demarrerEchantillonnage()
-	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut)
+	ordonnanceur := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais)
 	if err := ordonnanceur.Passe(t.Context(), cfg); err != nil {
 		t.Fatalf("passe de fetch 216k : %v", err)
 	}

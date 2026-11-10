@@ -231,7 +231,7 @@ func TestAcceptationKillPuisRedemarrage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ouverture du store : %v", err)
 	}
-	if err := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.RetourArriereDefaut).
+	if err := fetch.Nouveau(boutique, fetch.NouveauFetcher, fetch.DefautPauseEntreEssais).
 		Passe(t.Context(), config.Config{
 			RefreshInterval: time.Hour,
 			AllowedGroups:   []string{groupeFiltre},

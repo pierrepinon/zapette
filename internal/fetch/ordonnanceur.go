@@ -8,19 +8,19 @@ import (
 	"github.com/pierrepinon/zapette/internal/store"
 )
 
-// RetourArriereDefaut est le backoff fixe entre deux essais de fetch : il
+// DefautPauseEntreEssais est le backoff fixe entre deux essais de fetch : il
 // est fixé par la passe de conception, non configurable (5 s).
-const RetourArriereDefaut = 5 * time.Second
+const DefautPauseEntreEssais = 5 * time.Second
 
 // Ordonnanceur orchestre les passes de fetch : fabrique de fenêtre réseau,
 // backoff fixe, horloge. Le nombre d'essais et le timeout ne sont PAS des
 // champs : relus de la config à chaque passe (story 14). Il ne porte aucun
 // autre état de passe : tout ce qui persiste va au store.
 type Ordonnanceur struct {
-	boutique      *store.Store
-	fenetre       func(timeout time.Duration) Fetcher
-	retourArriere time.Duration
-	horloge       func() time.Time
+	boutique         *store.Store
+	fenetre          func(timeout time.Duration) Fetcher
+	pauseEntreEssais time.Duration
+	horloge          func() time.Time
 	// signaleur est OPTIONNEL (nil-safe, jamais forcé par Nouveau) : appelé
 	// aux sites d'échec déjà journalisés. Le câblage (main) y branche le
 	// ring d'erreurs du serveur : fetch ne connaît pas server, la
@@ -29,16 +29,16 @@ type Ordonnanceur struct {
 	signaleur func(string)
 }
 
-// Nouveau prépare l'ordonnanceur. retourArriere est le backoff fixe entre
-// deux essais (RetourArriereDefaut en prod, court en test). fenetre sert à
+// Nouveau prépare l'ordonnanceur. pauseEntreEssais est le backoff fixe entre
+// deux essais (DefautPauseEntreEssais en prod, court en test). fenetre sert à
 // injecter la fenêtre réseau ; timeout et reprises sont lus de la config à
 // chaque passe.
-func Nouveau(boutique *store.Store, fenetre func(timeout time.Duration) Fetcher, retourArriere time.Duration) *Ordonnanceur {
+func Nouveau(boutique *store.Store, fenetre func(timeout time.Duration) Fetcher, pauseEntreEssais time.Duration) *Ordonnanceur {
 	return &Ordonnanceur{
-		boutique:      boutique,
-		fenetre:       fenetre,
-		retourArriere: retourArriere,
-		horloge:       time.Now,
+		boutique:         boutique,
+		fenetre:          fenetre,
+		pauseEntreEssais: pauseEntreEssais,
+		horloge:          time.Now,
 	}
 }
 
@@ -74,7 +74,7 @@ func (o *Ordonnanceur) recuperer(ctx context.Context, fetch Fetcher, url string,
 					dernierErreur = ctx.Err()
 				}
 				return nil, dernierErreur
-			case <-time.After(o.retourArriere):
+			case <-time.After(o.pauseEntreEssais):
 			}
 		}
 		corps, err := fetch(ctx, url)
