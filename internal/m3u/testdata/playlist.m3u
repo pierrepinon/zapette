@@ -1,0 +1,11 @@
+#EXTM3U url-tvg="https://exemple.tld/guide.xml"
+#EXTINF:-1 tvg-id="bein1.fr" tvg-name="beIN Sports 1" tvg-logo="https://logo.exemple.tld/bein1.png" group-title="Sports",beIN Sports 1
+https://flux.exemple.tld/bein1.m3u8
+#EXTINF:-1 tvg-id="bfm.fr" tvg-name="BFM TV" group-title="News",BFM TV
+https://flux.exemple.tld/bfm.m3u8
+#EXTINF:-1 tvg-id="film1.fr" tvg-name="Films HD" group-title="Films",Films HD
+https://flux.exemple.tld/film1.m3u8
+#EXTINF:-1 tvg-id="serie1.fr" tvg-name="Séries HD" group-title="Séries",Séries HD
+https://flux.exemple.tld/serie1.m3u8
+#EXTINF:-1 tvg-name="Compte local" tvg-id="local.fr" group-title="Local",Compte local
+https://flux.exemple.tld/local.m3u8

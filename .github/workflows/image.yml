@@ -1,0 +1,74 @@
+# Publication de l'image multi-arch (amd64 + arm64) sur ghcr.io.
+#
+# L'image est construite depuis le Dockerfile (FROM scratch, CA copiés
+# d'une étape épinglée par digest, utilisateur non-root 65532) et poussée
+# avec buildx ; le digest de l'index multi-arch publié est exposé en
+# sortie de job (`jobs.image.outputs.digest`) pour être épinglé tel quel
+# dans les déploiements.
+#
+# Le build et la publication d'image sont exclusivement du travail CI :
+# jamais de build local.
+name: Image
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  IMAGE: ghcr.io/${{ github.repository }}
+
+jobs:
+  image:
+    name: Image multi-arch amd64 + arm64
+    runs-on: ubuntu-latest
+    outputs:
+      # Digest du manifest list multi-arch publié : la référence
+      # ghcr.io/pierrepinon/zapette@<digest> est immuable et pinnable.
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - name: QEMU (plateformes hôtes pour buildx)
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
+
+      - name: Buildx
+        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3
+
+      - name: Connexion à ghcr.io
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Métadonnées (tags et labels)
+        id: meta
+        uses: docker/metadata-action@318604b99e75e41977312d83839a89be02ca4893 # v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=sha,format=long
+
+      - name: Build et publication multi-arch
+        id: build
+        uses: docker/build-push-action@4f58ea79222b3b9dc2c8bbdd6debcef730109a75 # v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+
+      - name: Digest publié
+        run: echo "ghcr.io/pierrepinon/zapette@${{ steps.build.outputs.digest }}"

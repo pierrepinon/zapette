@@ -1,0 +1,31 @@
+# Exemple de configuration Zapette — les secrets passent par des variables
+# d'environnement, jamais en clair dans ce fichier.
+#
+# RÈGLE DES DÉFAUTS : un défaut ne s'applique que si la CLÉ est absente du
+# fichier. Une référence ${VAR} est autre chose : si VAR n'est pas définie
+# dans l'environnement, le chargement de la config EST UNE ERREUR — jamais
+# un retour au défaut. Ce n'est donc pas la même chose d'omettre la clé
+# (défaut appliqué) et d'y écrire ${VAR} non définie (erreur évidente,
+# affichée au démarrage).
+#
+# Développement ${VAR} : une référence quotée garde une valeur texte ; une
+# référence non quotée reçoit le type de la valeur développée (ex. un entier).
+
+refresh_interval: 6h                 # durée Go
+allowed_groups: [Sports, News]       # match exact, case-sensitive ; [] = tout garder
+sources:
+  - name: provider-a
+    m3u_url: ${IPTV_A_M3U_URL}       # doit être définie : sinon erreur de chargement
+    xmltv_url: ${IPTV_A_XMLTV_URL}   # optionnel : omettre la clé si absent
+  - name: provider-a-vod
+    m3u_url: ${IPTV_A_VOD_M3U_URL}
+
+fetch_timeout: 60s
+fetch_retries: 3                     # pause fixe 5 s entre essais
+server_addr: ${ZAPETTE_ADDR}         # clé absente = défaut [::]:8080 ; ICI,
+                                     # ZAPETTE_ADDR DOIT être définie (sinon
+                                     # erreur) — un seul chemin d'adresse :
+                                     # la config, jamais une relecture d'env
+data_dir: ${ZAPETTE_DATA_DIR}        # idem : définie ou erreur ; clé absente = ./data
+public_ipv4_url: https://api4.ipify.org   # optionnel, défauts ipify
+public_ipv6_url: https://api6.ipify.org

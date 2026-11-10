@@ -1,0 +1,18 @@
+/* Tailwind CSS v4 : le tout est embarqué dans le binaire (@tailwindcss/vite),
+   aucune police ni ressource externe. dark: est piloté par la classe .dark
+   sur <html> (bascule manuelle persistée), pas par prefers-color-scheme,
+   pour que la préférence choisie s'applique même contre le système. */
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: system-ui, sans-serif;
+}
+
+/* Focus visible partout, quel que soit le mode de navigation. */
+@layer base {
+  :focus-visible {
+    @apply outline-none ring-2 ring-indigo-500 dark:ring-indigo-400 ring-offset-2 ring-offset-slate-50 dark:ring-offset-slate-950;
+  }
+}
