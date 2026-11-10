@@ -5,9 +5,9 @@
       <stop offset="0" stop-color="#6366f1"/>
       <stop offset="1" stop-color="#8b5cf6"/>
     </linearGradient>
-    <linearGradient id="éclair" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#ffffff"/>
-      <stop offset="1" stop-color="#e0e7ff"/>
+    <linearGradient id="écran" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4f46e5"/>
+      <stop offset="1" stop-color="#7c3aed"/>
     </linearGradient>
     <clipPath id="carré">
       <rect width="64" height="64" rx="15"/>
@@ -17,8 +17,18 @@
   <g clip-path="url(#carré)">
     <circle cx="12" cy="6" r="32" fill="#ffffff" opacity="0.14"/>
   </g>
+  <g stroke="#eef2ff" stroke-width="4" stroke-linecap="round">
+    <path d="M25 20 L16 8"/>
+    <path d="M39 20 L48 8"/>
+  </g>
+  <rect x="10" y="21" width="44" height="27" rx="7" fill="#ffffff"/>
+  <rect x="17" y="28" width="30" height="13" rx="4" fill="url(#écran)"/>
   <path
+    transform="translate(23.7 26.8) scale(0.25)"
     d="M54.8 5 L9.4 28.6 h26.3 L30.7 56.7 56.8 33.1 H29.3 Z"
-    fill="url(#éclair)" stroke="url(#éclair)" stroke-width="2.5"
-    stroke-linejoin="round" stroke-linecap="round"/>
+    fill="#ffffff" stroke="#ffffff" stroke-width="4" stroke-linejoin="round"/>
+  <g fill="#ffffff">
+    <rect x="17" y="48" width="8" height="6" rx="2.5"/>
+    <rect x="39" y="48" width="8" height="6" rx="2.5"/>
+  </g>
 </svg>
