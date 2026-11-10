@@ -119,8 +119,8 @@ func (o *Ordonnanceur) Passe(ctx context.Context, cfg config.Config) error {
 	// 3) Reconstruction : fusion streaming des copies dans l'ordre des
 	// sources de la config. Reconstruire ignore les copies absentes et ne
 	// publie rien sans aucune copie — le disque reste celui d'avant.
-	copiesM3U := cheminsCopies(o.boutique, cfg, "m3u")
-	copiesXMLTV := cheminsCopies(o.boutique, cfg, "xmltv")
+	copiesM3U := o.boutique.CheminsCopies(nomsSources(cfg), "m3u")
+	copiesXMLTV := o.boutique.CheminsCopies(nomsSources(cfg), "xmltv")
 	if erreur := o.boutique.Reconstruire(copiesM3U, copiesXMLTV); erreur != nil {
 		return erreur
 	}
@@ -153,10 +153,12 @@ func amorcer(ancien *store.EtatArtefact, suivant time.Time) *store.EtatArtefact 
 	return etat
 }
 
-func cheminsCopies(boutique *store.Store, cfg config.Config, artefact string) []string {
-	chemins := make([]string, 0, len(cfg.Sources))
+// nomsSources retourne les noms de sources de la config, dans l'ordre : la
+// clé des copies de source côté store (ordres de fusion identiques).
+func nomsSources(cfg config.Config) []string {
+	noms := make([]string, 0, len(cfg.Sources))
 	for _, src := range cfg.Sources {
-		chemins = append(chemins, boutique.CheminCopie(src.Name, artefact))
+		noms = append(noms, src.Name)
 	}
-	return chemins
+	return noms
 }
