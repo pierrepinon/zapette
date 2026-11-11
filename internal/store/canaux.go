@@ -7,11 +7,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 
 	"github.com/pierrepinon/zapette/internal/m3u"
-	"github.com/pierrepinon/zapette/internal/tnt"
 	"github.com/pierrepinon/zapette/internal/xmltv"
 )
 
@@ -130,14 +128,10 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 		return err
 	}
 	vues := map[string]struct{}{}
-	// Numérotation de la suite : numéro officiel TNT (Arcom, package tnt)
-	// quand le tvg-id y figure — PREMIER-ARRIVÉ si le fournisseur étiquette
-	// deux chaînes du même tvg-id connu (pollution observée : RMC LIFE
-	// publiée sous « TFX.fr » : elle replie) — sinon suite séquentielle à
-	// partir de tnt.PremierHorsPlan(), dans l'ordre du merge. Le tvg-chno
-	// du fournisseur ne numérote RIEN (hors ordre, absent, troué).
-	horsPlan := tnt.PremierHorsPlan() - 1
-	officiels := map[string]struct{}{}
+	// Numérotation : LA MÊME règle que le snapshot M3U (type Numerotation)
+	// balayée dans LE MÊME ordre — les numeros publiés ici coïncident avec
+	// les tvg-chno réécrits du snapshot servi (ADR-0002).
+	numerotation := NouvelleNumerotation()
 	première := true
 	for _, copie := range copiesM3U {
 		f, err := os.Open(copie)
@@ -153,17 +147,7 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 				return nil // le merge a déjà retenu cette identité : dédoublon
 			}
 			vues[c.Identite()] = struct{}{}
-			numero := ""
-			if officiel, ok := tnt.Numero(c.TvgID); ok {
-				if _, pris := officiels[officiel]; !pris {
-					officiels[officiel] = struct{}{}
-					numero = officiel
-				}
-			}
-			if numero == "" {
-				horsPlan++
-				numero = strconv.Itoa(horsPlan)
-			}
+			numero := numerotation.Suivant(c.TvgID)
 			// tvg_id n'est publié que si l'ATTRIBUT existe : quand
 			// l'identité est l'URL de flux, il reste null (contrat #11) —
 			// la source XMLTV n'est alors jamais recherchée.

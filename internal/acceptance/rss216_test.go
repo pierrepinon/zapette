@@ -47,7 +47,8 @@ import (
 //     et téléchargements dédiés des deux artefacts PENDANT la charge, pic
 //     VmRSS échantillonné, corps lus en streaming.
 //  4. Diff binaire : les lignes #EXTINF/URL retenues côté source doivent se
-//     retrouver servies octet pour octet, et l'en-tête #EXTM3U préservé.
+//     retrouver servies octet pour octet, au tvg-chno près (seule réécriture
+//     admise, réécrit au numéro calculé — ADR-0002), en-tête #EXTM3U préservé.
 //  5. /api/status doit rendre compte du même compte de chaînes et d'un RSS.
 func TestAcceptationRSS216k(t *testing.T) {
 	if testing.Short() {

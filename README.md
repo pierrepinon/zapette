@@ -6,9 +6,10 @@
 
 Zapette est un filtre IPTV : il récupère périodiquement la playlist M3U et le
 guide XMLTV d'un fournisseur, n'en conserve que les groupes autorisés, et
-resse le résultat tel quel à un lecteur (Jellyfin, ou tout lecteur M3U).
-Aucune transformation du contenu, seulement du filtrage — les URL de flux sont
-retransmises octet pour octet, jamais réécrites ni proxifiées.
+resse le résultat tel quel à un lecteur (Jellyfin, ou tout lecteur M3U). La seule
+transformation du contenu est la renumérotation des `tvg-chno` selon le plan TNT
+officiel (ADR-0002) : les URL de flux sont retransmises octet pour octet, jamais
+réécrites ni proxifiées.
 
 - **Un unique binaire Go statique** (`CGO_ENABLED=0`), dashboard web embarqué
   (Svelte 5 + Tailwind CSS v4, servi via `embed.FS`, aucune ressource externe).

@@ -1,5 +1,8 @@
 # Snapshot filtré sur disque, servi en streaming
 
+> Partiellement remplacé par l'ADR-0002 : le M3U servi réécrit désormais son attribut
+> `tvg-chno` (seule exception à la fidélité « octet pour octet » ci-dessous).
+
 Les playlists IPTV dépassent souvent 200 000 entrées (~1 Go brut) et font mourir les proxys
 existants (Threadfin et forks) par OOM, parce qu'ils chargent tout en mémoire. Zapette ne
 conserve jamais la playlist complète en RAM : chaque source est filtrée en streaming à la

@@ -2,7 +2,8 @@
 
 Vocabulaire du domaine d'un filtre IPTV : un service qui récupère la playlist M3U et le
 guide XMLTV d'un fournisseur, ne conserve que les groupes autorisés, et les ressert tels
-quels à un lecteur. Aucune transformation du contenu, seulement du filtrage.
+quels à un lecteur. Aucune transformation du contenu, hormis la renumérotation des
+`tvg-chno` selon le plan de numérotation (ADR-0002) : seulement du filtrage.
 
 ## Fournisseur et sources
 
@@ -24,7 +25,8 @@ _Avoid_: duplicate entry, doublon ignoré sans règle de priorité
 
 **Flux**:
 L'URL de stream d'une chaîne, telle que publiée par le fournisseur. Elle est toujours
-resservie octet par octet, jamais réécrite ni proxifiée.
+resservie octet par octet, jamais réécrite ni proxifiée. La ligne `#EXTINF` n'a qu'une
+seule réécriture admise : son `tvg-chno` (ADR-0002).
 _Avoid_: lien, stream URL
 
 ## Filtrage
@@ -46,8 +48,10 @@ La suite officielle des numéros des chaînes TNT françaises, fixée par décis
 `canaux.json`, une chaîne dont le `tvg-id` figure au plan garde son numéro officiel ;
 toute autre chaîne suit la suite séquentielle de repli, qui démarre juste après le plan.
 Les numéros identifient les chaînes, ils ne trient pas `canaux.json` : l'ordre de lecture
-reste l'ordre du merge (sources de la config, puis fichier).
-_Avoid_: LCN, tvg-chno (numéro du fournisseur, jamais réinterprété), slot
+reste l'ordre du merge (sources de la config, puis fichier). Le M3U servi porte cette même
+numérotation dans ses `tvg-chno` (ADR-0002) — c'est ainsi qu'un lecteur comme Jellyfin
+l'affiche — et coïncide avec `canaux.json` sans état partagé : même règle, même ordre.
+_Avoid_: LCN, slot ; tvg-chno d'origine du fournisseur (réécrit au numéro calculé, ADR-0002)
 
 **Guide**:
 Le document XMLTV du fournisseur : chaînes (`<channel>`) et programmes (`<programme>`).

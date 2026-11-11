@@ -136,8 +136,11 @@ func monterFournisseur(t *testing.T, chemin, typeContenu string) string {
 
 // empreinteEntrees calcule l'empreinte SHA-256 des OCTETS BRUTS des entrées
 // (depuis #EXTINF jusqu'à l'URL de flux, fins de ligne d'origine) retenues du
-// fichier indiqué, filtrées par groupe exact si groupe != "". C'est la
-// fonction de diff binaire du critère « URL de flux strictement
+// fichier indiqué, filtrées par groupe exact si groupe != "". La ligne
+// #EXTINF est NORMALISÉE avant empreinte : son tvg-chno est forcé à « 0 »
+// par m3u.Numeroter — le tvg-chno est LA SEULE réécriture admise du M3U
+// servi (ADR-0002, numéros calculés), tout autre octet doit coïncider.
+// C'est la fonction de diff binaire du critère « URL de flux strictement
 // inchangées ». Mémoire constante : le harnais ne charge jamais la playlist
 // (ADR-0001).
 func empreinteEntrees(t *testing.T, chemin, groupe string) (string, int) {
@@ -155,6 +158,11 @@ func empreinteEntrees(t *testing.T, chemin, groupe string) (string, int) {
 		}
 		compte++
 		for _, ligne := range lignes {
+			// Normalisation de la ligne #EXTINF : hors tvg-chno, octets
+			// d'origine strictement exigés.
+			if strings.HasPrefix(ligne, "#EXTINF") {
+				ligne = m3u.Numeroter(ligne, "0")
+			}
 			if _, err := io.WriteString(h, ligne); err != nil {
 				return err
 			}

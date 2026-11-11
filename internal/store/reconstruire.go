@@ -49,10 +49,15 @@ func (s *Store) Reconstruire(copiesM3U, copiesXMLTV []string) error {
 // fusionnerM3U concatène les copies comme une seule playlist : en-tête du
 // premier arrivé (redondants ignorés par Balayer), dédup first-wins par
 // identité de chaîne (première source de la config gagne, puis premier
-// ordre de fichier), émission octet par octet des lignes brutes d'origine,
-// fins de ligne comprises.
+// ordre de fichier), émission DES LIGNES BRUTES D'ORIGINE, fins de ligne
+// comprises — à LA SEULE EXCEPTION du tvg-chno de chaque #EXTINF,
+// réécrit au numéro calculé (ADR-0002 : c'est lui que le lecteur —
+// Jellyfin en tête — numérote ; plan Arcom du tvg-id ou suite de repli).
+// Numérotation et canaux.json suivent LA MÊME règle dans LE MÊME ordre :
+// les numéros publiés des deux artefacts coïncident sans carte partagée.
 func fusionnerM3U(copies []string, sortie io.Writer) error {
 	vues := map[string]struct{}{}
+	numerotation := NouvelleNumerotation()
 	enTeteEmise := false
 
 	for _, copie := range copies {
@@ -79,6 +84,9 @@ func fusionnerM3U(copies []string, sortie io.Writer) error {
 					return nil
 				}
 				vues[c.Identite()] = struct{}{}
+				// Ligne #EXTINF réécrite au numéro retenu, reste de
+				// l'entrée (URL, directives rattachées) octet par octet.
+				lignes[0] = m3u.Numeroter(lignes[0], numerotation.Suivant(c.TvgID))
 				for _, ligne := range lignes {
 					if _, erreur := sortie.Write([]byte(ligne)); erreur != nil {
 						return erreur

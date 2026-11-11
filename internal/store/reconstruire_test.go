@@ -12,7 +12,8 @@ import (
 )
 
 // arteM3U et miroirM3U reprennent le scénario de TestBalayerFusionPremierGagne
-// (internal/m3u) : la fusion du snapshot doit s'y plier octet par octet.
+// (internal/m3u) : la fusion du snapshot doit s'y plier octet par octet,
+// au tvg-chno près — le SEUL attribut réécrit, au numéro calculé (ADR-0002).
 const (
 	arteM3U = `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
 #EXTINF:-1 tvg-id="arte.fr" group-title="Sports",Arte
@@ -49,13 +50,15 @@ func TestReconstruireM3UFusionPremierGagne(t *testing.T) {
 		t.Fatalf("lecture du snapshot : %v", err)
 	}
 	// Arte : première source gagne ; bfm retenu ; cnews ajouté par la
-	// seconde ; en-tête du premier arrivé.
+	// seconde ; en-tête du premier arrivé. Seuls les tvg-chno sont réécrits
+	// : arte.fr et cnews.fr → 7 et 14 (plan Arcom), bfm.fr hors plan →
+	// 27 (suite de repli) ; le reste — attributs, noms, URL — octet par octet.
 	attendu := `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
-#EXTINF:-1 tvg-id="arte.fr" group-title="Sports",Arte
+#EXTINF:-1 tvg-id="arte.fr" group-title="Sports" tvg-chno="7",Arte
 https://flux.exemple.tld/arte.m3u8
-#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News" tvg-chno="27",BFM
 https://flux.exemple.tld/bfm.m3u8
-#EXTINF:-1 tvg-id="cnews.fr" group-title="News",CNews
+#EXTINF:-1 tvg-id="cnews.fr" group-title="News" tvg-chno="14",CNews
 https://miroir.tld/cnews.m3u8
 `
 	if string(lu) != attendu {

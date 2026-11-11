@@ -115,11 +115,13 @@ func TestPasseFiltreCopieEtPublie(t *testing.T) {
 		!strings.Contains(string(lu), "bfm.fr") || strings.Contains(string(lu), "arte.fr") {
 		t.Errorf("copie arte.m3u : %q (%v)", lu, err)
 	}
-	// Snapshot m3u : en-tête du premier arrivé, arte.fr dédupliqué.
+	// Snapshot m3u : en-tête du premier arrivé, arte.fr dédupliqué ;
+	// tvg-chno réécrits aux numéros calculés (ADR-0002) : bfm.fr hors plan
+	// → 27, cnews.fr → 14 (plan Arcom).
 	attendu := `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
-#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News" tvg-chno="27",BFM
 https://flux.exemple.tld/bfm.m3u8
-#EXTINF:-1 tvg-id="cnews.fr" group-title="News",CNews
+#EXTINF:-1 tvg-id="cnews.fr" group-title="News" tvg-chno="14",CNews
 https://miroir.tld/cnews.m3u8
 `
 	if lu, err := os.ReadFile(b.CheminSnapshot("m3u")); err != nil || string(lu) != attendu {
@@ -184,11 +186,11 @@ func TestPasseSansListeToutRetenir(t *testing.T) {
 	}
 
 	attendu := `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
-#EXTINF:-1 tvg-id="arte.fr" group-title="Sports",Arte
+#EXTINF:-1 tvg-id="arte.fr" group-title="Sports" tvg-chno="7",Arte
 https://flux.exemple.tld/arte.m3u8
-#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News" tvg-chno="27",BFM
 https://flux.exemple.tld/bfm.m3u8
-#EXTINF:-1 tvg-id="cnews.fr" group-title="News",CNews
+#EXTINF:-1 tvg-id="cnews.fr" group-title="News" tvg-chno="14",CNews
 https://miroir.tld/cnews.m3u8
 `
 	if lu, err := os.ReadFile(b.CheminSnapshot("m3u")); err != nil || string(lu) != attendu {

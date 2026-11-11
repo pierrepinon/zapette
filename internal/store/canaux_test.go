@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/pierrepinon/zapette/internal/m3u"
 )
 
 // Le scénario de dédoublonnage de TestReconstruireM3UFusionPremierGagne est
@@ -184,6 +186,92 @@ https://flux.tld/nue.m3u8
 	if string(obtenuJSON) != string(attenduJSON) {
 		t.Errorf("obtenu %s, attendu %s", obtenuJSON, attenduJSON)
 	}
+}
+
+// TestReconstruireNumerosCoincident : le snapshot M3U (tvg-chno réécrits)
+// et canaux.json (champ numero) sont produits par DEUX passes DISTINCTES
+// sur les mêmes copies — ce test confronte LEURS numéros, entrée par entrée
+// dans l'ordre du merge, identité par identité : c'est le contrat implicite
+// d'ADR-0002 (un lecteur du M3U et le dashboard doivent être d'accord),
+// garanti sans état partagé, donc fragile devant toute divergence future
+// d'ordre de balayage.
+func TestReconstruireNumerosCoincident(t *testing.T) {
+	s, err := Ouvrir(t.TempDir())
+	if err != nil {
+		t.Fatalf("Ouvrir : %v", err)
+	}
+	for nom, contenu := range map[string]string{
+		"arte":   canauxArteM3U,
+		"miroir": canauxMiroirM3U,
+	} {
+		if err := s.EcrireCopie(nom, "m3u", ecrire(contenu)); err != nil {
+			t.Fatalf("EcrireCopie %s : %v", nom, err)
+		}
+	}
+	if err := s.EcrireCopie("arte", "xmltv", ecrire(canauxArteXMLTV)); err != nil {
+		t.Fatalf("EcrireCopie arte xmltv : %v", err)
+	}
+	if err := s.EcrireCopie("miroir", "xmltv", ecrire(canauxMiroirXMLTV)); err != nil {
+		t.Fatalf("EcrireCopie miroir xmltv : %v", err)
+	}
+	if err := s.Reconstruire(
+		[]string{s.CheminCopie("arte", "m3u"), s.CheminCopie("miroir", "m3u")},
+		[]string{s.CheminCopie("arte", "xmltv"), s.CheminCopie("miroir", "xmltv")},
+	); err != nil {
+		t.Fatalf("Reconstruire : %v", err)
+	}
+
+	// Le tvg-chno réécrit de chaque entrée du snapshot, au fil du balayage
+	// (l'ordre du merge) : extrait de la ligne #EXTINF brute.
+	var identites, numeros []string
+	f, err := os.Open(s.CheminSnapshot("m3u"))
+	if err != nil {
+		t.Fatalf("ouverture du snapshot : %v", err)
+	}
+	defer f.Close()
+	if err := m3u.Balayer(f, nil, func(c m3u.Chaine, lignes []string) error {
+		identites = append(identites, c.Identite())
+		numeros = append(numeros, numeroChno(lignes[0]))
+		return nil
+	}); err != nil {
+		t.Fatalf("balayage du snapshot : %v", err)
+	}
+
+	canaux := lireCanaux(t, s.CheminCanaux())
+	if len(canaux) != len(numeros) {
+		t.Fatalf("canaux.json : %d entrées, snapshot : %d — les deux doivent coïncider", len(canaux), len(numeros))
+	}
+	for i, canal := range canaux {
+		if canal.Numero != numeros[i] {
+			t.Errorf("entrée %d (%s) : numero %q, tvg-chno du snapshot %q — les numéros doivent coïncider",
+				i, canal.Nom, canal.Numero, numeros[i])
+		}
+		// Même chaîne des deux côtés : identité par tvg-id quand il
+		// existe, sinon l'URL de flux — invisible dans canaux.json, la
+		// correspondance par position fait alors foi (numéro déjà
+		// confronté ci-dessus).
+		if canal.TvgID != nil {
+			if *canal.TvgID != identites[i] {
+				t.Errorf("entrée %d : identités divergentes (%q / %q)", i, *canal.TvgID, identites[i])
+			}
+		} else if identites[i] == "" {
+			t.Errorf("entrée %d : identité du snapshot vide pour une chaîne sans tvg-id", i)
+		}
+	}
+}
+
+// numeroChno extrait la valeur de l'attribut tvg-chno d'une ligne #EXTINF
+// brute telle que servie : trouvée entre guillemets après « tvg-chno=" ».
+func numeroChno(extinf string) string {
+	i := strings.Index(extinf, ` tvg-chno="`)
+	if i < 0 {
+		return ""
+	}
+	reste := extinf[i+len(` tvg-chno="`):]
+	if j := strings.IndexByte(reste, '"'); j >= 0 {
+		return reste[:j]
+	}
+	return reste
 }
 
 // TestReconstruireCanauxSansCopieM3U : sans copie M3U, rien n'est publié —

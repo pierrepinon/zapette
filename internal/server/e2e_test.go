@@ -21,12 +21,22 @@ import (
 
 // Matériaux e2e : un fournisseur fake (httptest) qui publie une playlist et
 // un guide réduits mais réels. allowed_groups vide ⇒ tout est conservé :
-// le snapshot M3U servi est alors la copie du fournisseur, octet pour octet.
+// le snapshot M3U servi suit la copie du fournisseur octet pour octet, aux
+// tvg-chno près — réécrits au numéro calculé : arte.fr → 7 (plan Arcom),
+// bfm.fr → 27 (suite de repli) (ADR-0002).
 const (
 	m3uPourE2E = `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
 #EXTINF:-1 tvg-id="arte.fr" group-title="General",Arte
 https://flux.exemple.tld/arte.m3u8
 #EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+https://flux.exemple.tld/bfm.m3u8
+`
+	// m3uPourE2ERenumerote : le m3uPourE2E tel que servi — tvg-chno
+	// réécrits aux numéros calculés (adr-0002), le reste identique.
+	m3uPourE2ERenumerote = `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
+#EXTINF:-1 tvg-id="arte.fr" group-title="General" tvg-chno="7",Arte
+https://flux.exemple.tld/arte.m3u8
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News" tvg-chno="27",BFM
 https://flux.exemple.tld/bfm.m3u8
 `
 	xmltvPourE2E = `<?xml version="1.0" encoding="UTF-8"?>
@@ -189,7 +199,7 @@ func TestPrevisuGroupe(t *testing.T) {
 	}
 
 	attenduNews := `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
-#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
+#EXTINF:-1 tvg-id="bfm.fr" group-title="News" tvg-chno="27",BFM
 https://flux.exemple.tld/bfm.m3u8
 `
 	tests := []struct {
@@ -197,9 +207,10 @@ https://flux.exemple.tld/bfm.m3u8
 		corps  string
 	}{
 		{"News", attenduNews},
-		{"General", m3uPourE2E[:len(m3uPourE2E)-len(`#EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
-https://flux.exemple.tld/bfm.m3u8
-`)]},
+		{"General", `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
+#EXTINF:-1 tvg-id="arte.fr" group-title="General" tvg-chno="7",Arte
+https://flux.exemple.tld/arte.m3u8
+`},
 		{"Inconnu", "#EXTM3U url-tvg=\"https://exemple.tld/guide.xml\"\n"},
 	}
 	for _, cas := range tests {
@@ -367,7 +378,8 @@ type resumeCfg struct {
 // et /xmltv servent le snapshot du disque — les octets servies sont
 // identiques au fichier snapshot, en-têtes de contenu et no-cache corrects
 // (story 22), Content-Length connu (taille du fichier, ADR-0001). Le M3U
-// est en plus identique au corps du fournisseur (aucune réécriture).
+// suit le corps du fournisseur AU tvg-chno PRÈS (seule réécriture admise,
+// ADR-0002 : numéros calculés, le reste octet pour octet).
 func TestSnapshotServiOctetPourOctet(t *testing.T) {
 	arte, _ := fournir(t, m3uPourE2E, xmltvPourE2E)
 	cfg := configE2E(t, arte)
@@ -384,7 +396,7 @@ func TestSnapshotServiOctetPourOctet(t *testing.T) {
 		typeContenu string
 		corpsFourni string // corps attendu quand copie = corps du fournisseur, vide sinon
 	}{
-		{"/m3u", "audio/x-mpegurl; charset=utf-8", m3uPourE2E},
+		{"/m3u", "audio/x-mpegurl; charset=utf-8", m3uPourE2ERenumerote},
 		{"/xmltv", "application/xml; charset=utf-8", ""},
 	}
 	for _, cas := range tests {
