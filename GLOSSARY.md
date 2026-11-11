@@ -40,6 +40,15 @@ Une entrée de la playlist M3U (ligne `#EXTINF` suivie de son URL de flux). Son 
 son `tvg-id` quand il est présent, sinon son URL de flux.
 _Avoid_: entry, item, chaîne TV sans précision d'identité
 
+**Plan de numérotation**:
+La suite officielle des numéros des chaînes TNT françaises, fixée par décision de l'Arcom
+(numérotation en vigueur depuis le 6 juin 2025), reprise par convention par les box. Dans
+`canaux.json`, une chaîne dont le `tvg-id` figure au plan garde son numéro officiel ;
+toute autre chaîne suit la suite séquentielle de repli, qui démarre juste après le plan.
+Les numéros identifient les chaînes, ils ne trient pas `canaux.json` : l'ordre de lecture
+reste l'ordre du merge (sources de la config, puis fichier).
+_Avoid_: LCN, tvg-chno (numéro du fournisseur, jamais réinterprété), slot
+
 **Guide**:
 Le document XMLTV du fournisseur : chaînes (`<channel>`) et programmes (`<programme>`).
 _Avoid_: EPG, guide TV sans précision

@@ -45,9 +45,11 @@ https://miroir.tld/nue.m3u8
 // recetteCanaux monte un serveur de recette sur un data_dir rempli par
 // Reconstruire. Snapshot attendu, dans l'ordre du merge :
 //
-//	Arte      (arte,   Sports) source_xmltv=arte ; BFM, Info (arte, News) ;
-//	CNN       (miroir, News)   source_xmltv=arte (le guide arte publie l'id) ;
-//	« Sans rien » (miroir, groupe "") : logo/tvg_id/source_xmltv null.
+//	Arte      (arte,   Sports) numero 7 (plan Arcom), source_xmltv=arte ;
+//	BFM, Info (arte, News)     numeros 27, 28 (suite de repli) ;
+//	CNN       (miroir, News)   numero 29, source_xmltv=arte (le guide arte
+//	publie l'id) ; « Sans rien » (miroir, groupe "") : numero 30 quand
+//	même (sans tvg-id, la suite l'atteint), logo/tvg_id/source_xmltv null.
 func recetteCanaux(t *testing.T) (*store.Store, *httptest.Server) {
 	t.Helper()
 	boutique, err := store.Ouvrir(t.TempDir())
@@ -146,7 +148,7 @@ func TestCanauxPagination(t *testing.T) {
 	}
 	if len(réponse.Canaux) != 3 ||
 		réponse.Canaux[0].Nom != "Arte" || !pointeurÀ(réponse.Canaux[0].SourceXMLTV, "arte") ||
-		réponse.Canaux[0].Numero != "1" ||
+		réponse.Canaux[0].Numero != "7" ||
 		!pointeurÀ(réponse.Canaux[0].Logo, "https://img.tld/arte.png") ||
 		!pointeurÀ(réponse.Canaux[0].TvgID, "arte.fr") ||
 		réponse.Canaux[0].SourceM3U != "arte" ||
@@ -156,9 +158,10 @@ func TestCanauxPagination(t *testing.T) {
 		t.Errorf("page 1 inattendue : %+v", réponse.Canaux)
 	}
 
-	// Page 2 : cnn (source miroir, guide arte, numero 4), puis la chaîne
-	// SANS attribut (numero 5 quand même : la suite ignore ses tvg-chno
-	// manquants) : logo/tvg_id/source_xmltv null.
+	// Page 2 : cnn (source miroir, guide arte, numero 29 — suite de repli),
+	// puis la chaîne SANS attribut (numero 30 quand même : la suite
+	// l'atteint malgré ses tvg-chno manquants) : logo/tvg_id/source_xmltv
+	// null.
 	code, _, corps = obtenir(t, recette.URL+"/api/canaux?limit=3&offset=3")
 	if code != http.StatusOK {
 		t.Fatalf("/api/canaux?offset=3 : code %d, voulu 200", code)
@@ -174,9 +177,9 @@ func TestCanauxPagination(t *testing.T) {
 	if cnn.Nom != "CNN" || cnn.SourceM3U != "miroir" || !pointeurÀ(cnn.SourceXMLTV, "arte") {
 		t.Errorf("CNN : %+v (source_m3u miroir, source_xmltv arte attendues)", cnn)
 	}
-	if nue.Nom != "Sans rien" || nue.Numero != "5" || nue.Logo != nil ||
+	if nue.Nom != "Sans rien" || nue.Numero != "30" || nue.Logo != nil ||
 		nue.TvgID != nil || nue.SourceXMLTV != nil || nue.Groupe != "" {
-		t.Errorf("chaîne sans attribut : %+v (numero 5, champs optionnels null attendus)", nue)
+		t.Errorf("chaîne sans attribut : %+v (numero 30, champs optionnels null attendus)", nue)
 	}
 }
 

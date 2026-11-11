@@ -15,18 +15,18 @@ function canal(partial: Partial<Canal>): Canal {
   };
 }
 
-/** Page de 4 chaînes : numero toujours défini (suite dans l'ordre de la
-    config), logo/tvg_id/source_xmltv tantôt null, groupe mixte — assez
+/** Page de 4 chaînes : numero toujours défini (numéro Arcom ou suite de
+    repli), logo/tvg_id/source_xmltv tantôt null, groupe mixte — assez
     pour tester pagination, filtre et recherche. */
 const page: RéponseCanaux = {
   total: 120,
   offset: 0,
   limit: 50,
   canaux: [
-    canal({ numero: '1', nom: 'Arte', logo: 'https://img/arte.png', groupe: 'Sports', tvg_id: 'arte.fr', source_m3u: 'arte', source_xmltv: 'arte' }),
-    canal({ numero: '2', nom: 'BFM', logo: null, groupe: 'News', tvg_id: 'bfm.fr', source_m3u: 'arte' }),
-    canal({ numero: '3', nom: 'CNN', logo: null, groupe: 'News', tvg_id: 'cnn.fr', source_m3u: 'miroir', source_xmltv: 'arte' }),
-    canal({ numero: '4', nom: 'Sans rien', logo: null, groupe: '', tvg_id: null, source_m3u: 'miroir' }),
+    canal({ numero: '7', nom: 'Arte', logo: 'https://img/arte.png', groupe: 'Sports', tvg_id: 'arte.fr', source_m3u: 'arte', source_xmltv: 'arte' }),
+    canal({ numero: '13', nom: 'BFM TV', logo: null, groupe: 'News', tvg_id: 'bfmtv.fr', source_m3u: 'arte' }),
+    canal({ numero: '27', nom: 'CNN', logo: null, groupe: 'News', tvg_id: 'cnn.fr', source_m3u: 'miroir', source_xmltv: 'arte' }),
+    canal({ numero: '28', nom: 'Sans rien', logo: null, groupe: '', tvg_id: null, source_m3u: 'miroir' }),
   ],
 };
 
@@ -153,9 +153,9 @@ describe('créerCanaux — store de la vue Chaînes', () => {
     expect(canaux.lignes[0].tvg_id).toBe('cnn.fr');
 
     // La recherche porte AUSSI sur l'id XMLTV, pas seulement le nom.
-    canaux.définirRecherche('BFM.FR');
+    canaux.définirRecherche('BFMTV.fr');
     expect(canaux.lignes.length).toBe(1);
-    expect(canaux.lignes[0].nom).toBe('BFM');
+    expect(canaux.lignes[0].nom).toBe('BFM TV');
 
     // Aucune correspondance : liste vide, pas d'erreur.
     canaux.définirRecherche('autrichien');

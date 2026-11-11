@@ -16,10 +16,14 @@ const (
 https://flux.exemple.tld/arte.m3u8
 #EXTINF:-1 tvg-id="bfm.fr" group-title="News",BFM
 https://flux.exemple.tld/bfm.m3u8
+#EXTINF:-1 tvg-id="tfx.fr" group-title="News",TFX
+https://flux.exemple.tld/tfx.m3u8
 `
 	canauxMiroirM3U = `#EXTM3U url-tvg="https://exemple.tld/guide.xml"
 #EXTINF:-1 tvg-id="arte.fr" tvg-chno="9" group-title="Sports",Arte miroir
 https://miroir.tld/arte.m3u8
+#EXTINF:-1 tvg-id="TFX.fr" group-title="News",RMC LIFE
+https://miroir.tld/rmclife.m3u8
 #EXTINF:-1 tvg-chno="7" group-title="News",La chaîne sans guide
 https://flux.exemple.tld/noguide.m3u8
 `
@@ -55,6 +59,10 @@ func lireCanaux(t *testing.T, chemin string) []Canal {
 // provenance en lisant les copies source par source dans l'ordre de la
 // config — première source qui retient la chaîne (dédup first-wins) pour
 // source_m3u, première copie de guide qui publie l'id pour source_xmltv.
+// Le numero suit le plan officiel TNT (Arcom) : arte.fr → 7, tfx.fr → 11
+// (le TFX.fr du miroir, pollution qui désigne RMC LIFE, reçoit un numéro
+// de repli : premier-arrivé sur le numéro officiel) ; bfm.fr et la chaîne
+// sans guide, hors plan, tombent dans la suite qui démarre à 27.
 func TestReconstruireEcritCanauxProvenancePremierGagne(t *testing.T) {
 	s, err := Ouvrir(t.TempDir())
 	if err != nil {
@@ -85,18 +93,26 @@ func TestReconstruireEcritCanauxProvenancePremierGagne(t *testing.T) {
 	attendu := []Canal{
 		// arte.fr : conservée par la source arte (première) — son logo
 		// vient d'ELLE (le miroir perd le dédup, avec son tvg-chno="9"
-		// IGNORÉ : le numéro est la position dans la suite) ; arte.fr est
-		// publié d'abord par le guide arte.
-		{Numero: "1", Nom: "Arte", Logo: ptr("https://img.tld/arte.png"), Groupe: "Sports",
+		// IGNORÉ) ; arte.fr est publié d'abord par le guide arte.
+		// Numero : numéro OFFICIEL Arcom du tvg-id.
+		{Numero: "7", Nom: "Arte", Logo: ptr("https://img.tld/arte.png"), Groupe: "Sports",
 			TvgID: ptr("arte.fr"), SourceM3U: "arte", SourceXMLTV: ptr("arte")},
-		// bfm.fr : chaîne unique, aucun guide ne publie son id — sans
-		// tvg-chno dans le fichier, le numéro reste sa position.
-		{Numero: "2", Nom: "BFM", Logo: nil, Groupe: "News",
+		// bfm.fr : tvg-id hors plan → premier numéro de la suite de
+		// repli (27, juste après le canal 26 de la TNT).
+		{Numero: "27", Nom: "BFM", Logo: nil, Groupe: "News",
 			TvgID: ptr("bfm.fr"), SourceM3U: "arte", SourceXMLTV: nil},
+		// tfx.fr : numéro officiel Arcom.
+		{Numero: "11", Nom: "TFX", Logo: nil, Groupe: "News",
+			TvgID: ptr("tfx.fr"), SourceM3U: "arte", SourceXMLTV: nil},
+		// TFX.fr (RMC LIFE) : CASSE différente, même tvg-id que tfx.fr —
+		// le numéro officiel 11 est déjà pris (premier-arrivé) : repli
+		// sur la suite (28).
+		{Numero: "28", Nom: "RMC LIFE", Logo: nil, Groupe: "News",
+			TvgID: ptr("TFX.fr"), SourceM3U: "miroir", SourceXMLTV: nil},
 		// Identité = URL de flux : sans tvg-id, tvg_id est null ET
 		// source_xmltv est null (un id à null n'est jamais recherché) —
-		// tvg-chno="7" est IGNORÉ : le numéro reste la position.
-		{Numero: "3", Nom: "La chaîne sans guide", Logo: nil, Groupe: "News",
+		// tvg-chno="7" est IGNORÉ : la suite continue (29).
+		{Numero: "29", Nom: "La chaîne sans guide", Logo: nil, Groupe: "News",
 			TvgID: nil, SourceM3U: "miroir", SourceXMLTV: nil},
 	}
 	if len(canaux) != len(attendu) {
@@ -133,7 +149,8 @@ func TestReconstruireEcritCanauxProvenancePremierGagne(t *testing.T) {
 // TestReconstruireCanauxChampsVidesNuls : groupe absent → "", attributs
 // absents (logo, tvg-id) → null — y compris tvg_id quand l'identité est
 // l'URL de flux (contrat #11 : null si l'identité n'est pas un tvg-id).
-// Le numero, LUI, est toujours défini : la position dans la suite.
+// Le numero, LUI, est toujours défini : sans tvg-id au plan Arcom, la
+// tête de la suite de repli (27).
 func TestReconstruireCanauxChampsVidesNuls(t *testing.T) {
 	s, err := Ouvrir(t.TempDir())
 	if err != nil {
@@ -154,7 +171,7 @@ https://flux.tld/nue.m3u8
 	if len(canaux) != 1 {
 		t.Fatalf("1 entrée attendue, obtenu %d", len(canaux))
 	}
-	attendu := Canal{Numero: "1", Nom: "Nue sans rien", Groupe: "",
+	attendu := Canal{Numero: "27", Nom: "Nue sans rien", Groupe: "",
 		TvgID: nil, SourceM3U: "nue"}
 	obtenuJSON, err := json.Marshal(canaux[0])
 	if err != nil {

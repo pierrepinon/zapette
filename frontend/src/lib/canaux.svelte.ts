@@ -11,8 +11,9 @@
 export type ÉtatChargement = 'chargement' | 'ok' | 'erreur';
 
 /** Une chaîne du snapshot — le contrat Go de internal/store.Canal : numero
-    est TOUJOURS défini (suite séquentielle dans l'ordre déclaré de la
-    config), nulls explicites pour logo/tvg_id/source_xmltv. */
+    est TOUJOURS défini (numéro officiel TNT/Arcom quand le tvg_id y
+    figure, sinon suite séquentielle après le plan), nulls explicites pour
+    logo/tvg_id/source_xmltv. */
 export interface Canal {
   numero: string;
   nom: string;
