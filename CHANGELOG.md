@@ -5,6 +5,22 @@ Toutes les évolutions de ce projet sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 le versionnage suit [SemVer](https://semver.org/lang/fr/).
 
+## [0.2.1] — 2026-11-11
+
+### Corrigé
+
+- **Numérotation visible dans les lecteurs M3U** (Jellyfin en tête) : ceux-ci
+  numérotent les chaînes d'après l'attribut `tvg-chno` du M3U, que zapette
+  resservait tel quel du fournisseur — la numérotation officielle de la v0.2.0
+  ne vivait que dans `canaux.json` (dashboard) et restait invisible des
+  lecteurs. Le snapshot M3U servi réécrit désormais le SEUL attribut
+  `tvg-chno` de chaque `#EXTINF` au numéro calculé (plan Arcom du `tvg_id`,
+  sinon suite de repli) ; tout le reste — URL de flux, noms, logos, fins de
+  ligne, en-tête — traverse à l'octet près (ADR-0002, remplacement partiel
+  de l'ADR-0001). Dashboard et lecteur affichent la même numérotation : la
+  règle est partagée et rejouée à l'identique. Budget RSS inchangé (état de
+  numérotation borné par le plan, 26 entrées).
+
 ## [0.2.0] — 2026-11-11
 
 ### Changements
@@ -67,5 +83,6 @@ resse le résultat tel quel à un lecteur (aucune réécriture ni proxy de flux)
   attaché à la GitHub Release (`gh release create --verify-tag
   --generate-notes`).
 
+[0.2.1]: https://github.com/pierrepinon/zapette/releases/tag/v0.2.1
 [0.2.0]: https://github.com/pierrepinon/zapette/releases/tag/v0.2.0
 [0.1.0]: https://github.com/pierrepinon/zapette/releases/tag/v0.1.0

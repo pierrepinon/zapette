@@ -4,7 +4,7 @@ Statut : accepté. Remplace partiellement l'ADR-0001 (clause « M3U : octet pour
 
 ## Contexte
 
-Les lecteurs M3U numérote les chaînes d'après l'attribut `tvg-chno` des lignes `#EXTINF`
+Les lecteurs M3U numérotent les chaînes d'après l'attribut `tvg-chno` des lignes `#EXTINF`
 (Jellyfin le fait nativement). Celui du fournisseur est hors ordre, troué ou absent : le
 tableau de bord de zapette numérote déjà les chaînes selon le plan officiel TNT de l'Arcom
 (v0.2.0, `internal/tnt`), mais cette numérotation ne vivait que dans `canaux.json`, que seul
