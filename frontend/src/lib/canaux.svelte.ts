@@ -10,10 +10,11 @@
 
 export type ÉtatChargement = 'chargement' | 'ok' | 'erreur';
 
-/** Une chaîne du snapshot — le contrat Go de internal/store.Canal, nulls
-    explicites pour numero/logo/tvg_id/source_xmltv (jamais omitempty). */
+/** Une chaîne du snapshot — le contrat Go de internal/store.Canal : numero
+    est TOUJOURS défini (suite séquentielle dans l'ordre déclaré de la
+    config), nulls explicites pour logo/tvg_id/source_xmltv. */
 export interface Canal {
-  numero: string | null;
+  numero: string;
   nom: string;
   logo: string | null;
   groupe: string;

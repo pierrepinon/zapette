@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/pierrepinon/zapette/internal/m3u"
@@ -24,11 +25,15 @@ func pointeurOuNil(v string) *string {
 
 // Canal est une entrée de canaux.json : une chaîne du snapshot (filtrée et
 // dédoublonnée), avec la provenance déduite PAR LE MERGE du store (issue #11).
-// Les champs pointeur (numero, logo, tvg_id, source_xmltv) sont null quand
+// Numero est la POSITION de la chaîne dans l'ordre du merge — les sources
+// de la config dans leur ordre déclaré, puis l'ordre du fichier — : une
+// suite 1, 2, 3…, TOUJOURS définie, jamais le tvg-chno du fournisseur
+// (numérotations hors ordre et trous du fournisseur ignorées).
+// Les champs pointeur (logo, tvg_id, source_xmltv) sont null quand
 // la valeur n'existe pas — nulls EXPLICITES, jamais omitempty : le contrat
 // lu par le dashboard est toujours de la même forme (ADR-0001).
 type Canal struct {
-	Numero      *string `json:"numero"`
+	Numero      string  `json:"numero"`
 	Nom         string  `json:"nom"`
 	Logo        *string `json:"logo"`
 	Groupe      string  `json:"groupe"`
@@ -44,8 +49,9 @@ func (s *Store) CheminCanaux() string {
 
 // EcrireCanaux publie canaux.json : le tableau des chaînes retenues par le
 // merge M3U (une entrée par chaîne, ordre des sources de la config puis
-// ordre du fichier), avec provenance source_m3u (source du merge premier-
-// arrivé) et source_xmltv (premier guide qui publie l'id). Publication par
+// ordre du fichier), numérotées SÉQUENTIELLEMENT dans cet ordre (1, 2, 3…),
+// avec provenance source_m3u (source du merge premier-arrivé) et
+// source_xmltv (premier guide qui publie l'id). Publication par
 // temporaire voisin + rename atomique, via le même publier que les snapshots
 // (ADR-0001). Appelée par Reconstruire : meta.json reste écrit EN DERNIER
 // par la passe de fetch.
@@ -68,8 +74,8 @@ func (s *Store) EcrireCanaux(copiesM3U, copiesXMLTV []string) error {
 //     la retention ; chaque <channel id> publié par une copie enregistre
 //     id → nom de la source POUR LA PREMIÈRE fois (source_xmltv) ;
 //  2. copies M3U : le MÊME dédup first-wins que fusionnerM3U retient
-//     l'entrée gagnante de chaque identité, qui est encodée et écrite au
-//     fil de l'eau entre crochets du tableau.
+//     l'entrée gagnante de chaque identité, qui est numérotée par sa
+//     position dans la suite et encodée au fil de l'eau entre crochets.
 func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 	// Passe 1 : provenance XMLTV, déduite pendant la fusion du guide (le
 	// même balayage qui décide de la retention). Les copies filtraient déjà
@@ -119,6 +125,11 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 		return err
 	}
 	vues := map[string]struct{}{}
+	// Suite séquentielle : la position de chaque chaîne retenue, dans
+	// l'ordre déclaré de la config puis l'ordre du fichier — le tvg-chno
+	// du fournisseur ne numérote RIEN (numérotation hors ordre, absente
+	// ou trouée : jamais réinterprétée).
+	numero := 0
 	première := true
 	for _, copie := range copiesM3U {
 		f, err := os.Open(copie)
@@ -134,6 +145,7 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 				return nil // le merge a déjà retenu cette identité : dédoublon
 			}
 			vues[c.Identite()] = struct{}{}
+			numero++
 			// tvg_id n'est publié que si l'ATTRIBUT existe : quand
 			// l'identité est l'URL de flux, il reste null (contrat #11) —
 			// la source XMLTV n'est alors jamais recherchée.
@@ -144,7 +156,7 @@ func ecrireCanaux(copiesM3U, copiesXMLTV []string, sortie io.Writer) error {
 				}
 			}
 			entrée := Canal{
-				Numero:      pointeurOuNil(c.TvgChno),
+				Numero:      strconv.Itoa(numero),
 				Nom:         c.Nom,
 				Logo:        pointeurOuNil(c.TvgLogo),
 				Groupe:      c.Groupe,

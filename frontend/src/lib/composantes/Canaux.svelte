@@ -123,7 +123,7 @@
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
           {#each canaux.lignes as chaîne, i (chaîne.nom + chaîne.tvg_id + i)}
             <tr>
-              <td class="py-2 pr-3 tabular-nums">{afficher(chaîne.numero)}</td>
+              <td class="py-2 pr-3 tabular-nums">{chaîne.numero}</td>
               <td class="py-2 pr-3">
                 {#if chaîne.logo}
                   <img

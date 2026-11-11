@@ -4,7 +4,7 @@ import { créerCanaux, type Canal, type RéponseCanaux } from './canaux.svelte';
 /** Fabrique d'une entrée canaux conforme au contrat Go (issue #11). */
 function canal(partial: Partial<Canal>): Canal {
   return {
-    numero: null,
+    numero: '',
     nom: '',
     logo: null,
     groupe: '',
@@ -15,17 +15,18 @@ function canal(partial: Partial<Canal>): Canal {
   };
 }
 
-/** Page de 4 chaînes : numero/logo/tvg_id/source_xmltv tantôt null, groupe
-    mixte — assez pour tester pagination, filtre et recherche. */
+/** Page de 4 chaînes : numero toujours défini (suite dans l'ordre de la
+    config), logo/tvg_id/source_xmltv tantôt null, groupe mixte — assez
+    pour tester pagination, filtre et recherche. */
 const page: RéponseCanaux = {
   total: 120,
   offset: 0,
   limit: 50,
   canaux: [
-    canal({ numero: '4', nom: 'Arte', logo: 'https://img/arte.png', groupe: 'Sports', tvg_id: 'arte.fr', source_m3u: 'arte', source_xmltv: 'arte' }),
-    canal({ numero: '5', nom: 'BFM', groupe: 'News', tvg_id: 'bfm.fr', source_m3u: 'arte' }),
-    canal({ numero: '7', nom: 'CNN', groupe: 'News', tvg_id: 'cnn.fr', source_m3u: 'miroir', source_xmltv: 'arte' }),
-    canal({ nom: 'Sans rien', source_m3u: 'miroir' }),
+    canal({ numero: '1', nom: 'Arte', logo: 'https://img/arte.png', groupe: 'Sports', tvg_id: 'arte.fr', source_m3u: 'arte', source_xmltv: 'arte' }),
+    canal({ numero: '2', nom: 'BFM', logo: null, groupe: 'News', tvg_id: 'bfm.fr', source_m3u: 'arte' }),
+    canal({ numero: '3', nom: 'CNN', logo: null, groupe: 'News', tvg_id: 'cnn.fr', source_m3u: 'miroir', source_xmltv: 'arte' }),
+    canal({ numero: '4', nom: 'Sans rien', logo: null, groupe: '', tvg_id: null, source_m3u: 'miroir' }),
   ],
 };
 

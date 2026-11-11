@@ -69,9 +69,9 @@ https://miroir.tld/cnews.m3u8
 }
 
 // TestBalayerAttributsPublication épingle l'exposition des attributs du
-// ticket « page Chaînes » (#11) : tvg-chno et tvg-logo sont analysés comme
-// les attributs existants (tvg-id, group-title), sans que le consommateur
-// (le store) ne repare la ligne #EXTINF à la main.
+// ticket « page Chaînes » (#11) : tvg-logo est analysé comme les attributs
+// existants (tvg-id, group-title), sans que le consommateur (le store) ne
+// reparse la ligne #EXTINF à la main.
 func TestBalayerAttributsPublication(t *testing.T) {
 	source := `#EXTM3U
 #EXTINF:-1 tvg-id="arte.fr" tvg-chno="4" tvg-logo="https://img.tld/arte.png" group-title="Généralistes",Arte
@@ -96,20 +96,16 @@ https://flux.tld/nue.m3u8
 
 	cas := []struct {
 		nom     string
-		tvgChno string
 		tvgLogo string
 		tvgID   string
 		groupe  string
 		nomAff2 string
 	}{
-		{"Arte", "4", "https://img.tld/arte.png", "arte.fr", "Généralistes", "Arte"},
-		{"Sans", "", "", "", "Local", "Sans"},
-		{"Nue", "", "", "nue.fr", "", "Nue"},
+		{"Arte", "https://img.tld/arte.png", "arte.fr", "Généralistes", "Arte"},
+		{"Sans", "", "", "Local", "Sans"},
+		{"Nue", "", "nue.fr", "", "Nue"},
 	}
 	for i, c := range cas {
-		if reçues[i].TvgChno != c.tvgChno {
-			t.Errorf("%s : TvgChno %q, attendu %q", c.nom, reçues[i].TvgChno, c.tvgChno)
-		}
 		if reçues[i].TvgLogo != c.tvgLogo {
 			t.Errorf("%s : TvgLogo %q, attendu %q", c.nom, reçues[i].TvgLogo, c.tvgLogo)
 		}

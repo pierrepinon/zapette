@@ -38,12 +38,10 @@ func Balayer(
 			case strings.HasPrefix(normale, "#EXTINF"):
 				tvgID, _ := attribut(normale, "tvg-id")
 				groupe, _ := attribut(normale, "group-title")
-				tvgChno, _ := attribut(normale, "tvg-chno")
 				tvgLogo, _ := attribut(normale, "tvg-logo")
 				courante = Chaine{
 					TvgID:   tvgID,
 					Groupe:  groupe,
-					TvgChno: tvgChno,
 					TvgLogo: tvgLogo,
 					Nom:     nomAffiche(normale),
 				}

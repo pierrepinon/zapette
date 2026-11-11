@@ -47,7 +47,7 @@ https://miroir.tld/nue.m3u8
 //
 //	Arte      (arte,   Sports) source_xmltv=arte ; BFM, Info (arte, News) ;
 //	CNN       (miroir, News)   source_xmltv=arte (le guide arte publie l'id) ;
-//	« Sans rien » (miroir, groupe "") : numero/logo/tvg_id/source_xmltv null.
+//	« Sans rien » (miroir, groupe "") : logo/tvg_id/source_xmltv null.
 func recetteCanaux(t *testing.T) (*store.Store, *httptest.Server) {
 	t.Helper()
 	boutique, err := store.Ouvrir(t.TempDir())
@@ -146,7 +146,7 @@ func TestCanauxPagination(t *testing.T) {
 	}
 	if len(réponse.Canaux) != 3 ||
 		réponse.Canaux[0].Nom != "Arte" || !pointeurÀ(réponse.Canaux[0].SourceXMLTV, "arte") ||
-		!pointeurÀ(réponse.Canaux[0].Numero, "4") ||
+		réponse.Canaux[0].Numero != "1" ||
 		!pointeurÀ(réponse.Canaux[0].Logo, "https://img.tld/arte.png") ||
 		!pointeurÀ(réponse.Canaux[0].TvgID, "arte.fr") ||
 		réponse.Canaux[0].SourceM3U != "arte" ||
@@ -156,8 +156,9 @@ func TestCanauxPagination(t *testing.T) {
 		t.Errorf("page 1 inattendue : %+v", réponse.Canaux)
 	}
 
-	// Page 2 : cnn (source miroir, guide arte), puis la chaîne SANS
-	// attribut : numero/logo/tvg_id/source_xmltv tous null.
+	// Page 2 : cnn (source miroir, guide arte, numero 4), puis la chaîne
+	// SANS attribut (numero 5 quand même : la suite ignore ses tvg-chno
+	// manquants) : logo/tvg_id/source_xmltv null.
 	code, _, corps = obtenir(t, recette.URL+"/api/canaux?limit=3&offset=3")
 	if code != http.StatusOK {
 		t.Fatalf("/api/canaux?offset=3 : code %d, voulu 200", code)
@@ -173,9 +174,9 @@ func TestCanauxPagination(t *testing.T) {
 	if cnn.Nom != "CNN" || cnn.SourceM3U != "miroir" || !pointeurÀ(cnn.SourceXMLTV, "arte") {
 		t.Errorf("CNN : %+v (source_m3u miroir, source_xmltv arte attendues)", cnn)
 	}
-	if nue.Nom != "Sans rien" || nue.Numero != nil || nue.Logo != nil ||
+	if nue.Nom != "Sans rien" || nue.Numero != "5" || nue.Logo != nil ||
 		nue.TvgID != nil || nue.SourceXMLTV != nil || nue.Groupe != "" {
-		t.Errorf("chaîne sans attribut : %+v (tous champs optionnels null attendus)", nue)
+		t.Errorf("chaîne sans attribut : %+v (numero 5, champs optionnels null attendus)", nue)
 	}
 }
 

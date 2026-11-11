@@ -83,17 +83,20 @@ func TestReconstruireEcritCanauxProvenancePremierGagne(t *testing.T) {
 
 	canaux := lireCanaux(t, s.CheminCanaux())
 	attendu := []Canal{
-		// arte.fr : conservée par la source arte (première) — son numéro
-		// et son logo viennent d'ELLE (le miroir perd le dédup, avec son
-		// tvg-chno="9") ; arte.fr est publié d'abord par le guide arte.
-		{Numero: ptr("4"), Nom: "Arte", Logo: ptr("https://img.tld/arte.png"), Groupe: "Sports",
+		// arte.fr : conservée par la source arte (première) — son logo
+		// vient d'ELLE (le miroir perd le dédup, avec son tvg-chno="9"
+		// IGNORÉ : le numéro est la position dans la suite) ; arte.fr est
+		// publié d'abord par le guide arte.
+		{Numero: "1", Nom: "Arte", Logo: ptr("https://img.tld/arte.png"), Groupe: "Sports",
 			TvgID: ptr("arte.fr"), SourceM3U: "arte", SourceXMLTV: ptr("arte")},
-		// bfm.fr : chaîne unique, aucun guide ne publie son id.
-		{Numero: nil, Nom: "BFM", Logo: nil, Groupe: "News",
+		// bfm.fr : chaîne unique, aucun guide ne publie son id — sans
+		// tvg-chno dans le fichier, le numéro reste sa position.
+		{Numero: "2", Nom: "BFM", Logo: nil, Groupe: "News",
 			TvgID: ptr("bfm.fr"), SourceM3U: "arte", SourceXMLTV: nil},
 		// Identité = URL de flux : sans tvg-id, tvg_id est null ET
-		// source_xmltv est null (un id à null n'est jamais recherché).
-		{Numero: ptr("7"), Nom: "La chaîne sans guide", Logo: nil, Groupe: "News",
+		// source_xmltv est null (un id à null n'est jamais recherché) —
+		// tvg-chno="7" est IGNORÉ : le numéro reste la position.
+		{Numero: "3", Nom: "La chaîne sans guide", Logo: nil, Groupe: "News",
 			TvgID: nil, SourceM3U: "miroir", SourceXMLTV: nil},
 	}
 	if len(canaux) != len(attendu) {
@@ -128,8 +131,9 @@ func TestReconstruireEcritCanauxProvenancePremierGagne(t *testing.T) {
 }
 
 // TestReconstruireCanauxChampsVidesNuls : groupe absent → "", attributs
-// absents (numero, logo, tvg-id) → null — y compris tvg_id quand l'identité
-// est l'URL de flux (contrat #11 : null si l'identité n'est pas un tvg-id).
+// absents (logo, tvg-id) → null — y compris tvg_id quand l'identité est
+// l'URL de flux (contrat #11 : null si l'identité n'est pas un tvg-id).
+// Le numero, LUI, est toujours défini : la position dans la suite.
 func TestReconstruireCanauxChampsVidesNuls(t *testing.T) {
 	s, err := Ouvrir(t.TempDir())
 	if err != nil {
@@ -150,7 +154,7 @@ https://flux.tld/nue.m3u8
 	if len(canaux) != 1 {
 		t.Fatalf("1 entrée attendue, obtenu %d", len(canaux))
 	}
-	attendu := Canal{Nom: "Nue sans rien", Groupe: "",
+	attendu := Canal{Numero: "1", Nom: "Nue sans rien", Groupe: "",
 		TvgID: nil, SourceM3U: "nue"}
 	obtenuJSON, err := json.Marshal(canaux[0])
 	if err != nil {
