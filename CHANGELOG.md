@@ -5,6 +5,28 @@ Toutes les évolutions de ce projet sont documentées ici.
 Le format suit [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) ;
 le versionnage suit [SemVer](https://semver.org/lang/fr/).
 
+## [0.2.0] — 2026-11-11
+
+### Changements
+
+- **Numérotation officielle des chaînes (plan Arcom)** : le champ `numero`
+  de `canaux.json`, qui reprenait tel quel le `tvg-chno` du fournisseur
+  (souvent hors ordre, troué, parfois absent), est désormais calculé :
+  numéro du plan TNT officiel fixé par l'Arcom (numérotation en vigueur
+  depuis le 6 juin 2025) quand le `tvg_id` de la chaîne y figure —
+  comparaison insensible à la casse, premier-arrivé en cas de `tvg_id`
+  dupliqué du fournisseur —, sinon suite séquentielle de repli démarrant
+  juste après le plan, dans l'ordre déclaré des sources de la config puis
+  l'ordre du fichier. Changement de contrat : `numero` était null quand le
+  fournisseur ne publiait pas de `tvg-chno`, il est maintenant TOUJOURS
+  défini (type du dashboard mis à jour en conséquence). Les snapshots M3U
+  et XMLTV servis ne sont pas touchés.
+
+### Maintenance
+
+- Renovate : clé invalide `managers` remplacée par `enabledManagers` (la
+  configuration sinon cassée à chaque passage de Renovate).
+
 ## [0.1.0] — 2026-11-10
 
 ### Release initiale
@@ -45,4 +67,5 @@ resse le résultat tel quel à un lecteur (aucune réécriture ni proxy de flux)
   attaché à la GitHub Release (`gh release create --verify-tag
   --generate-notes`).
 
+[0.2.0]: https://github.com/pierrepinon/zapette/releases/tag/v0.2.0
 [0.1.0]: https://github.com/pierrepinon/zapette/releases/tag/v0.1.0
